@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "evoseer"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "ipywidgets>=8.1.8",
+    "numpy>=2.4.4",
+    "pyyaml>=6.0.3",
+]
+
+[tool.setuptools.packages.find]
+include = ["evoseer*"]
+
+[dependency-groups]
+dev = [
+    "ipynb>=0.5.1",
+    "matplotlib>=3.10.9",
+    "notebook>=7.5.5",
+    "pytest>=9.0.3",
+    "tqdm>=4.67.3",
+]

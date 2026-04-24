@@ -1,0 +1,28 @@
+simulation:
+  max_steps: 1_000_000
+  max_time: 365.0
+  max_cells: 50_000
+  seed: 42
+  snapshot_interval: 500
+  dump_final_state: true
+
+mutation_store:
+  source: ":memory:"
+
+mutation_generator:
+  type: uniform
+
+rate_function:
+  type: weighted_sum
+  baseline_birth_rate: 0.5
+  baseline_death_rate: 0.2
+
+plugins:
+  mutation_rate:
+    type: constant_rate
+    target: mutation_rate
+    params:
+      mu: 0.5
+
+recorder:
+  output_dir: results/

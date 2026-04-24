@@ -1,0 +1,212 @@
+---
+title: Layer 2 — Feature Plugins
+description: FeaturePlugin ABC — how biological features plug into the engine
+---
+
+Feature plugins are the primary extension point for biological logic. Each plugin computes a **score** for a cell at a given simulation step. That score feeds either into the birth/death rate computation ([Layer 3](/EvoSeer-Engine/architecture/layers/rate-functions/)) or serves as the per-cell mutation rate.
+
+---
+
+## How a plugin gets its data
+
+### The YAML config block
+
+Each plugin is declared as a named entry under `plugins:` in the YAML. Here is every key it can have:
+
+```yaml
+plugins:
+  my_feature:                  # ← the plugin's runtime name (used as dict key everywhere)
+    type: my_plugin            # ← resolves to the class whose name == "my_plugin"
+    target: rate_function      # ← "rate_function" | "mutation_rate"
+    category: proliferative    # ← "proliferative" | "deleterious"  (rate_function only)
+    weight: 0.3                # ← multiplier applied to the score in WeightedSumRate
+    alpha: 0.0                 # ← density-dependence exponent (score × N^alpha)
+    params:                    # ← arbitrary dict passed to __init__ as-is
+      threshold: 2.0
+      my_key: my_value
+```
+
+### What each key does
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `type` | `str` | required | Looked up in `plugins.REGISTRY` to find the class |
+| `target` | `str` | `"rate_function"` | `"rate_function"` → score feeds into birth/death rate; `"mutation_rate"` → score is μ_i |
+| `category` | `str` | `"proliferative"` | Used by `WeightedSumRate`: `"proliferative"` adds to birth rate, `"deleterious"` adds to death rate |
+| `weight` | `float` | `1.0` | Multiplier on the score: `contribution = weight × score × N^alpha` |
+| `alpha` | `float` | `0.0` | Density-dependence exponent. `0.0` = no density dependence. `1.0` = linear in N |
+| `params` | `dict` | `{}` | Passed verbatim to `__init__(params, store)` — plugin-specific config |
+
+:::note[weight and alpha are not visible to your plugin]
+`weight`, `alpha`, and `category` are stored in `PluginConfig` and used by the `RateFunction` — **not** by your plugin code. Your plugin only ever sees `params` (via `self.get_param()`). The engine collects your score, then passes it to the rate function along with the `PluginConfig` metadata.
+:::
+
+### From YAML to your `__init__`
+
+`load_config()` parses the YAML into a `PluginConfig` dataclass, then `build_engine()` instantiates your class:
+
+```
+YAML
+  └─ plugins.my_feature.params → dict  ─┐
+  └─ plugins.my_feature.type            ├─► REGISTRY["my_plugin"](params, store)
+                                         │                 ↑
+                                    MutationStore ─────────┘
+```
+
+Your constructor receives exactly two arguments:
+
+```python
+def __init__(self, params: dict[str, Any], store: MutationStore) -> None:
+    super().__init__(params, store)   # stores both as self._params, self._store
+    self._threshold = self.get_param("threshold")   # reads from params
+```
+
+`store` is the same `MutationStore` instance shared by the entire simulation — you can call `self._store.get(mutation_id)` inside `compute_score` to look up mutation annotations.
+
+---
+
+## Base class — `FeaturePlugin`
+
+```python
+from evoseer.plugins import FeaturePlugin
+```
+
+### Class attributes
+
+```python
+class MyPlugin(FeaturePlugin):
+    name: str = "my_plugin"              # must match YAML type:
+    involved_pathways: list[str] = []    # triggers recompute on mutation in these pathways
+```
+
+`involved_pathways` is critical for performance. If your plugin's score depends on MAPK mutations, declare `involved_pathways = ["MAPK"]`. The engine will call `mark_dirty()` on your plugin's state only when a new mutation lands in that pathway — avoiding recomputation for every cell at every step.
+
+### Methods
+
+#### `compute_score(cell_state, ctx) → float` *(abstract)*
+
+The only method you **must** implement. Returns a non-negative float.
+
+```python
+def compute_score(self, cell_state: CellState, ctx: SimContext) -> float:
+    ...
+```
+
+Available on `cell_state`:
+- `cell_state.mutations` — `set[int]` of mutation IDs the cell carries
+- `cell_state.plugin_states` — `dict[str, PluginState]` (other plugins' state if needed)
+
+Available on `ctx`:
+- `ctx.t` — current simulation time
+- `ctx.step` — current step number
+- `ctx.N` — current population size
+
+#### `init_state(cell_state, ctx) → PluginState`
+
+Return a fresh `PluginState` for a new cell. Override when you need custom per-cell fields. See [Layer 1](/EvoSeer-Engine/architecture/layers/data-state/) for how to subclass `PluginState`.
+
+#### `on_division(parent_state, ctx) → PluginState`
+
+Return the child's `PluginState` after a division. Default: copies the parent's cached score so no recomputation is needed. Override when the child needs different initialisation than the parent.
+
+---
+
+## Full example — a pathway activation plugin
+
+```python
+# evoseer/plugins/pathway_activation.py
+from __future__ import annotations
+from dataclasses import dataclass, field
+from evoseer.core.cell import CellState, PluginState
+from evoseer.core.context import SimContext
+from evoseer.plugins import FeaturePlugin
+from evoseer.services.mutation_store import MutationStore
+
+
+@dataclass
+class PathwayState(PluginState):
+    """Custom state: tracks which pathways are active in this cell."""
+    active_pathways: set[str] = field(default_factory=set)
+
+
+class PathwayActivationPlugin(FeaturePlugin):
+    """Score = fraction of declared pathways activated by the cell's mutations."""
+
+    name: str = "pathway_activation"
+    involved_pathways: list[str] = ["MAPK", "PI3K", "WNT"]
+
+    def __init__(self, params: dict, store: MutationStore) -> None:
+        super().__init__(params, store)
+        self._pathways = set(self.get_param("pathways", default=self.involved_pathways))
+        self._max_score = float(self.get_param("max_score", default=1.0))
+
+    def init_state(self, cell_state: CellState, ctx: SimContext) -> PathwayState:
+        return PathwayState()
+
+    def compute_score(self, cell_state: CellState, ctx: SimContext) -> float:
+        active = set()
+        for mid in cell_state.mutations:
+            try:
+                record = self._store.get(mid)
+                active |= set(record.pathways) & self._pathways
+            except KeyError:
+                pass
+        if not self._pathways:
+            return 0.0
+        return self._max_score * len(active) / len(self._pathways)
+
+    def on_division(self, parent_state: CellState, ctx: SimContext) -> PathwayState:
+        parent_ps = parent_state.plugin_states.get(self.name, PathwayState())
+        return PathwayState(
+            _cached_score=parent_ps._cached_score,
+            _dirty=False,
+            active_pathways=set(getattr(parent_ps, "active_pathways", set())),
+        )
+```
+
+### Register it
+
+```python
+# evoseer/plugins/__init__.py
+from evoseer.plugins.pathway_activation import PathwayActivationPlugin
+
+REGISTRY: dict[str, type] = {
+    cls.name: cls for cls in [
+        ConstantMutationRatePlugin,
+        PathwayActivationPlugin,
+    ]
+}
+```
+
+### Configure it
+
+```yaml
+plugins:
+  mapk_activation:
+    type: pathway_activation
+    target: rate_function
+    category: proliferative   # activating MAPK increases birth rate
+    weight: 0.5               # contribution = 0.5 × score × N^0
+    alpha: 0.0
+    params:
+      pathways: ["MAPK", "PI3K"]
+      max_score: 1.0
+```
+
+With `weight: 0.5` and a fully activated score of `1.0`, this plugin contributes `+0.5` to the birth rate. The baseline birth rate (from `rate_function.baseline_birth_rate`) is always added on top.
+
+---
+
+## Built-in plugins
+
+### `ConstantMutationRatePlugin`
+
+```yaml
+mutation_rate:
+  type: constant_mutation_rate
+  target: mutation_rate
+  params:
+    mu: 0.5
+```
+
+Returns a fixed μ regardless of cell state. Use as a baseline or for null models. `weight`, `alpha`, and `category` are ignored for `mutation_rate` plugins — the engine reads the score directly as μ_i.

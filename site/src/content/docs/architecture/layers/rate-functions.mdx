@@ -1,0 +1,101 @@
+---
+title: Layer 3 — Rate Functions
+description: RateFunction ABC — translating plugin scores into birth and death rates
+---
+
+A rate function takes the per-plugin scores for a single cell and returns a `(birth_rate, death_rate)` pair. The engine sums these across all living cells to get the total event rate Λ used by the Gillespie algorithm.
+
+The rate function is intentionally **biology-agnostic**: it only sees numeric scores and configuration metadata (`weight`, `category`, `alpha`).
+
+## Base class — `RateFunction`
+
+```python
+# evoseer/rate_functions/base.py
+from evoseer.rate_functions import RateFunction
+```
+
+### Methods
+
+#### `compute_rates(scores, plugin_configs, N) → tuple[float, float]` *(abstract)*
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `scores` | `dict[str, float]` | plugin_name → score for all `rate_function`-targeted plugins |
+| `plugin_configs` | `dict[str, PluginConfig]` | plugin_name → config (weight, category, alpha) |
+| `N` | `int` | Current population size (for density dependence via `N^alpha`) |
+
+Returns `(birth_rate, death_rate)` — both non-negative floats.
+
+---
+
+## Creating a new rate function
+
+### 1. Implement the class
+
+```python
+# evoseer/rate_functions/my_rate.py
+from evoseer.core.config import PluginConfig, RateFunctionConfig
+from evoseer.rate_functions import RateFunction
+
+class MyRateFunction(RateFunction):
+    name: str = "my_rate"
+
+    def __init__(self, config: RateFunctionConfig) -> None:
+        super().__init__(config)
+        self._baseline_birth = config.baseline_birth_rate
+        self._baseline_death = config.baseline_death_rate
+
+    def compute_rates(
+        self,
+        scores: dict[str, float],
+        plugin_configs: dict[str, PluginConfig],
+        N: int,
+    ) -> tuple[float, float]:
+        birth = self._baseline_birth
+        death = self._baseline_death
+        # your logic here
+        return max(0.0, birth), max(0.0, death)
+```
+
+### 2. Register it
+
+Add it to `evoseer/rate_functions/__init__.py`:
+
+```python
+from evoseer.rate_functions.my_rate import MyRateFunction
+
+REGISTRY: dict[str, type] = {
+    cls.name: cls for cls in [WeightedSumRate, MyRateFunction]
+}
+```
+
+### 3. Configure it in YAML
+
+```yaml
+rate_function:
+  type: my_rate
+  baseline_birth_rate: 0.5
+  baseline_death_rate: 0.3
+```
+
+---
+
+## Built-in rate functions
+
+### `WeightedSumRate`
+
+Implements equations 2.3 / 2.4 from the design doc:
+
+```
+b_i = baseline_birth + Σ_{f ∈ proliferative}  w_f · S_f,i · N^α_f
+d_i = baseline_death + Σ_{f ∈ deleterious}    w_f · S_f,i · N^α_f
+```
+
+Plugins with `category: proliferative` contribute to the birth rate; plugins with `category: deleterious` contribute to the death rate. Rates are clamped to `[0, ∞)`.
+
+```yaml
+rate_function:
+  type: weighted_sum
+  baseline_birth_rate: 0.5
+  baseline_death_rate: 0.3
+```

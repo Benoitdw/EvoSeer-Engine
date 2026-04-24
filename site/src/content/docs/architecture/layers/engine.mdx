@@ -1,0 +1,71 @@
+---
+title: Layer 5 — Engine
+description: GillespieEngine — the biology-agnostic simulation loop
+---
+
+The `GillespieEngine` orchestrates the Gillespie algorithm over a population of cells. It knows nothing about biology — it only sees cells, numeric scores, and rates. All biological logic lives in [Feature Plugins](/EvoSeer-Engine/architecture/layers/plugins/).
+
+```python
+# evoseer/engine/gillespie.py
+from evoseer.engine.gillespie import GillespieEngine
+```
+
+## Seven-step loop
+
+At each iteration the engine:
+
+1. **Collect scores** — calls `compute_score()` on every `rate_function`-targeted plugin for every living cell (cached via `_dirty` flag)
+2. **Compute rates** — calls `rate_function.compute_rates(scores, plugin_configs, N)` per cell
+3. **Draw waiting time** — `Δt ~ Exp(Λ)` where `Λ = Σ λ_i`
+4. **Select cell** — proportional to its total rate `λ_i = b_i + d_i`
+5. **Select event** — division with probability `b_i / λ_i`, death otherwise
+6. **Execute event** — assigns new mutations, marks dirty plugins
+7. **Snapshot** — records population metrics every `snapshot_interval` steps
+
+## Stopping conditions
+
+The loop stops on the first condition met:
+
+| Condition | `stop_reason` |
+|-----------|---------------|
+| `step >= max_steps` | `"max_steps"` |
+| `t >= max_time` | `"max_time"` |
+| `N >= max_cells` | `"max_cells"` |
+| `N == 0` | `"extinction"` |
+| `Λ <= 0` | `"zero_rate"` |
+
+## Constructor
+
+```python
+GillespieEngine(
+    plugins: dict[str, FeaturePlugin],
+    plugin_configs: dict[str, PluginConfig],
+    rate_function: RateFunction,
+    mutation_generator: MutationGenerator,
+    store: MutationStore,
+    recorder: Recorder,
+    config: SimulationConfig,
+)
+```
+
+In normal usage you don't construct the engine directly — `evoseer/main.py` assembles it from the YAML config and the plugin/rate-function/service registries.
+
+## Score caching
+
+The engine calls `_get_score()` which checks `PluginState._dirty` before calling `compute_score()`. A score is only recomputed when:
+
+- `ps._dirty` is `True` (set by `mark_dirty()` after a mutation in a relevant pathway)
+- The plugin state is missing for the cell (lazily initialised)
+
+This avoids redundant computation in large populations where most cells are unaffected by each division event.
+
+## Division event detail
+
+On division the engine:
+
+1. Calls `plugin.on_division(parent_state, ctx)` for **all** plugins → builds child plugin states
+2. Gets `μ_i` from the `mutation_rate` plugin
+3. Delegates count + ID sampling to `mutation_generator.generate(μ_i)`
+4. Creates the child cell with `parent.mutations ∪ new_mutations`
+5. Marks `_dirty` on plugins whose `involved_pathways` intersect with the new mutations' pathways
+6. Records driver acquisitions and the division event

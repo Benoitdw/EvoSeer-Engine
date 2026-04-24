@@ -1,0 +1,75 @@
+---
+title: Layer 6 — Recording
+description: Recorder — three-tier event logging, periodic snapshots, final state
+---
+
+The `Recorder` accumulates simulation output without interfering with the engine loop. It writes to an in-memory `SimulationResult` which is returned by `engine.run()`.
+
+```python
+from evoseer.recording.recorder import Recorder, SimulationResult
+```
+
+## Three recording tiers
+
+### 1. Per-event log
+
+Every division, death, and driver acquisition is logged immediately with step-level resolution.
+
+```python
+result.divisions  # list[DivisionEvent(step, parent_id, child_id)]
+result.deaths     # list[DeathEvent(step, cell_id)]
+result.drivers    # list[DriverEvent(step, cell_id, mutation_id)]
+```
+
+The full division log is the authoritative source for reconstructing the **phylogenetic tree** — every cell's lineage can be traced back to the founder cell.
+
+### 2. Periodic snapshots
+
+Population-level metrics are captured every `snapshot_interval` steps.
+
+```python
+result.snapshots  # list[Snapshot(step, t, n_alive, n_dead_cumulative)]
+```
+
+Default interval: 500 steps. Configure via:
+
+```python
+recorder = Recorder(snapshot_interval=100)
+```
+
+### 3. End-of-simulation state
+
+Full mutational state of all living cells at termination (when `dump_final_state=True`).
+
+```python
+result.final_mutations  # dict[cell_id, set[mutation_id]]
+```
+
+## `SimulationResult`
+
+```python
+@dataclass
+class SimulationResult:
+    divisions: list[DivisionEvent]
+    deaths: list[DeathEvent]
+    drivers: list[DriverEvent]
+    snapshots: list[Snapshot]
+    final_mutations: dict[int, set[int]] | None
+    stop_reason: str  # "max_steps" | "max_time" | "max_cells" | "extinction" | "zero_rate"
+```
+
+## Reconstructing the phylogenetic tree
+
+The `divisions` list contains every `(parent_id, child_id)` pair in order. To build the full tree:
+
+```python
+from collections import defaultdict
+
+children = defaultdict(list)
+for event in result.divisions:
+    children[event.parent_id].append(event.child_id)
+
+# children[0] → direct children of the founder cell
+```
+
+This structure is what the [Visualizer](/EvoSeer-Engine/visualizer/) will use to render phylogenetic trees.

@@ -27,10 +27,19 @@ EvoSeer is built around a strict layered architecture where each layer has a sin
 └─────────────────────────────────────────────────┘
 ```
 
+| Layer | Docs |
+|-------|------|
+| Layer 1 — Data & State | [Cell, CellState, PluginState](/EvoSeer-Engine/architecture/layers/data-state/) |
+| Layer 2 — Feature Plugins | [FeaturePlugin ABC + how to create one](/EvoSeer-Engine/architecture/layers/plugins/) |
+| Layer 3 — Rate Functions | [RateFunction ABC + how to create one](/EvoSeer-Engine/architecture/layers/rate-functions/) |
+| Layer 4 — Services | [MutationStore, MutationGenerator + how to create](/EvoSeer-Engine/architecture/layers/services/) |
+| Layer 5 — Engine | [GillespieEngine — the simulation loop](/EvoSeer-Engine/architecture/layers/engine/) |
+| Layer 6 — Recording | [Recorder — events, snapshots, final state](/EvoSeer-Engine/architecture/layers/recording/) |
+
 ## Key design decisions
 
-**Biology-agnostic engine** — `GillespieEngine` knows nothing about mutations, pathways, or cell biology. It only calls `get_rate()` and `apply_event()`. All biological logic lives in plugins.
+**Biology-agnostic engine** — `GillespieEngine` knows nothing about mutations, pathways, or cell biology. It only calls `get_rate()` and `apply_event()`. All biological logic lives in plugins. → [Layer 5](/EvoSeer-Engine/architecture/layers/engine/)
 
-**`_dirty` flag on PluginState** — a plugin's score is only recomputed when a mutation lands in one of its `involved_pathways`, or after a division event. This avoids redundant computation in large populations.
+**`_dirty` flag on PluginState** — a plugin's score is only recomputed when a mutation lands in one of its `involved_pathways`, or after a division event. → [Layer 1](/EvoSeer-Engine/architecture/layers/data-state/)
 
-**Plugin types are orthogonal** — `rate_function` plugins feed scores into birth/death rates. `mutation_rate` plugins produce μ_i (the per-division mutation rate). They are registered and resolved independently.
+**Plugin types are orthogonal** — `rate_function` plugins feed scores into birth/death rates. `mutation_rate` plugins produce μ_i (the per-division mutation rate). See [Mutation Pipeline](/EvoSeer-Engine/architecture/mutation-pipeline/) for the full separation of concerns.

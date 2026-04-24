@@ -1,0 +1,160 @@
+---
+title: Layer 4 — Services
+description: MutationStore and MutationGenerator — mutation data and sampling
+---
+
+The services layer owns two independent concerns: **storing mutation annotations** and **sampling new mutations at division**. See [Mutation Pipeline](/EvoSeer-Engine/architecture/mutation-pipeline/) for the full design rationale.
+
+---
+
+## `MutationStore`
+
+An abstract lookup for mutation annotations. The engine and plugins interact only with this interface — the backing storage (in-memory dict, SQLite, CSV) is a swappable implementation detail.
+
+```python
+from evoseer.services import MutationStore, MutationRecord
+```
+
+### `MutationRecord`
+
+```python
+@dataclass
+class MutationRecord:
+    mutation_id: int
+    gene_id: int | None
+    gene_name: str | None
+    pathways: list[str]
+    is_driver: bool | None
+    extra: dict[str, Any]   # arbitrary annotation fields for plugins
+```
+
+### Interface
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `get(mutation_id)` | `MutationRecord` | Full annotations — raises `KeyError` if unknown |
+| `get_gene_pathways(mutation_id)` | `list[str]` | Pathway names for the mutation's gene |
+| `is_driver(mutation_id)` | `bool \| None` | Driver flag, `None` if unknown |
+| `all_ids()` | `list[int]` | All known mutation IDs (needed by generators at startup) |
+
+### Creating a new store
+
+```python
+# evoseer/services/my_store.py
+from evoseer.services import MutationStore, MutationRecord
+
+class SQLiteMutationStore(MutationStore):
+    def __init__(self, db_path: str) -> None:
+        import sqlite3
+        self._conn = sqlite3.connect(db_path)
+
+    def get(self, mutation_id: int) -> MutationRecord:
+        row = self._conn.execute(
+            "SELECT * FROM mutations WHERE id = ?", (mutation_id,)
+        ).fetchone()
+        if row is None:
+            raise KeyError(mutation_id)
+        return MutationRecord(mutation_id=row[0], ...)
+
+    def get_gene_pathways(self, mutation_id: int) -> list[str]: ...
+    def is_driver(self, mutation_id: int) -> bool | None: ...
+    def all_ids(self) -> list[int]: ...
+```
+
+### Built-in: `InMemoryMutationStore`
+
+Dict-backed store for testing and prototyping.
+
+```python
+from evoseer.services.mutation_store import InMemoryMutationStore, MutationRecord
+
+store = InMemoryMutationStore()
+store.add_mutation(MutationRecord(
+    mutation_id=1,
+    gene_name="KRAS",
+    pathways=["MAPK"],
+    is_driver=True,
+))
+```
+
+---
+
+## `MutationGenerator`
+
+Owns the full count-and-sample pipeline for one division event: how many mutations to draw, and which IDs to return. The engine only calls `generate(mu_i)`.
+
+```python
+from evoseer.services import MutationGenerator
+```
+
+### Interface
+
+#### `__init__(store, params)` *(abstract)*
+
+Called **once at startup**. Pre-compute the sampling distribution over `store.all_ids()`. This is the right place to build probability vectors — `generate()` is called at every division event and must be fast.
+
+#### `generate(mu) → list[int]` *(abstract)*
+
+Return mutation IDs for a daughter cell after one division. `mu` is the per-division mutation rate from the `mutation_rate` plugin. Generators that use a fixed count may ignore it.
+
+### Creating a new generator
+
+```python
+# evoseer/services/my_generator.py
+from evoseer.services import MutationGenerator, MutationStore
+import numpy as np
+
+class CosmicMutationGenerator(MutationGenerator):
+    name: str = "cosmic"
+
+    def __init__(self, store: MutationStore, params: dict) -> None:
+        tissue = params["tissue"]
+        ids = store.all_ids()
+        weights = np.array([
+            self._sbs_weight(store.get(i), tissue) for i in ids
+        ])
+        weights /= weights.sum()
+        self._ids = np.array(ids)
+        self._probs = weights
+        self._rng = np.random.default_rng(params.get("seed"))
+
+    def generate(self, mu: float) -> list[int]:
+        if mu <= 0.0:
+            return []
+        n = int(self._rng.poisson(mu))
+        return self._rng.choice(self._ids, size=n, p=self._probs, replace=True).tolist()
+
+    def _sbs_weight(self, record, tissue): ...
+```
+
+Register it in `evoseer/services/__init__.py`:
+
+```python
+from evoseer.services.my_generator import CosmicMutationGenerator
+
+REGISTRY: dict[str, type] = {
+    cls.name: cls for cls in [UniformMutationGenerator, CosmicMutationGenerator]
+}
+```
+
+Configure in YAML:
+
+```yaml
+mutation_generator:
+  type: cosmic
+  params:
+    tissue: "Skin-Melanoma"
+    seed: 42
+```
+
+### Built-in: `UniformMutationGenerator`
+
+- Count: `n ~ Poisson(μ)`
+- IDs: sampled uniformly with replacement over all mutations in the store
+
+```yaml
+mutation_generator:
+  type: uniform
+  params:
+    seed: 42
+```

@@ -1,0 +1,66 @@
+---
+title: Layer 1 — Data & State
+description: Cell, CellState, and PluginState — the core data structures
+---
+
+All simulation state lives in three classes defined in `evoseer/core/cell.py`. No simulation logic sits here — these are pure data containers.
+
+## `PluginState`
+
+Holds per-cell state for a single plugin. The dirty/cache mechanism avoids recomputing scores at every Gillespie step.
+
+```python
+@dataclass
+class PluginState:
+    _cached_score: float | None = None
+    _dirty: bool = True
+```
+
+A score is recomputed only when:
+- A new mutation lands in one of the plugin's `involved_pathways`
+- A division event occurs
+
+Subclass `PluginState` when your plugin needs to store additional per-cell fields:
+
+```python
+from evoseer.core.cell import PluginState
+from dataclasses import dataclass, field
+
+@dataclass
+class MyPluginState(PluginState):
+    activation_count: int = 0
+    active_pathways: list[str] = field(default_factory=list)
+```
+
+Return an instance of your subclass from `FeaturePlugin.init_state()` and `on_division()`.
+
+## `CellState`
+
+The biological state of a cell: its mutation set and a per-plugin state map.
+
+```python
+@dataclass
+class CellState:
+    mutations: set[int]
+    plugin_states: dict[str, PluginState]
+```
+
+The engine passes `CellState` to `compute_score()` — your plugin reads mutations and plugin states from here.
+
+## `Cell`
+
+Identity, lineage, and biological state combined. The engine assigns monotonically increasing IDs.
+
+```python
+class Cell:
+    id: int
+    parent_id: int | None
+    children_ids: list[int]
+    birth_step: int
+    alive: bool
+    state: CellState
+```
+
+:::note
+Lineage pointers (`parent_id`, `children_ids`) are maintained only for **living** cells. The `Recorder`'s division event log is the authoritative source for the full phylogeny.
+:::

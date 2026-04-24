@@ -28,7 +28,13 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install Python dependencies
-        run: uv sync
+        run: uv sync --dev
+
+      - name: Execute notebooks
+        run: |
+          for nb in notebooks/*.ipynb; do
+            uv run jupyter nbconvert --to notebook --execute --inplace "$nb"
+          done
 
       - name: Build notebooks
         run: uv run python scripts/build_notebooks.py

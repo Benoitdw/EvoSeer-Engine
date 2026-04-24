@@ -485,6 +485,7 @@ dependencies = [
 dev = [
     { name = "ipynb" },
     { name = "matplotlib" },
+    { name = "nbconvert" },
     { name = "notebook" },
     { name = "pytest" },
     { name = "tqdm" },
@@ -501,6 +502,7 @@ requires-dist = [
 dev = [
     { name = "ipynb", specifier = ">=0.5.1" },
     { name = "matplotlib", specifier = ">=3.10.9" },
+    { name = "nbconvert", specifier = ">=7.17.1" },
     { name = "notebook", specifier = ">=7.5.5" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "tqdm", specifier = ">=4.67.3" },

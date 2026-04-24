@@ -2,25 +2,26 @@
 import json
 import os
 import subprocess
+import sys
 import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 DOCS_DIR = ROOT / "site" / "src" / "content" / "docs"
 
-GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
-GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
-REPO = os.environ["REPO"]
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
+REPO = os.environ.get("REPO")
 
 GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
-    f"gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    "gemini-2.0-flash-lite:generateContent?key={key}"
 )
 
 
 def collect_docs() -> str:
     parts = []
-    for path in sorted(DOCS_DIR.rglob("*.md")) + sorted(DOCS_DIR.rglob("*.mdx")):
+    for path in sorted(DOCS_DIR.rglob("*.mdx")):
         rel = path.relative_to(ROOT)
         parts.append(f"=== {rel} ===\n{path.read_text()}")
     return "\n\n".join(parts)
@@ -57,7 +58,7 @@ Respond with a concise markdown list of findings. If there are no significant is
     }).encode()
 
     req = urllib.request.Request(
-        GEMINI_URL,
+        GEMINI_URL.format(key=GEMINI_API_KEY),
         data=body,
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -71,7 +72,6 @@ def open_github_issue(findings: str) -> None:
     body = json.dumps({
         "title": "Doc audit findings",
         "body": f"Automated nightly audit findings:\n\n{findings}",
-        "labels": ["documentation"],
     }).encode()
 
     req = urllib.request.Request(
@@ -90,6 +90,10 @@ def open_github_issue(findings: str) -> None:
 
 
 def main() -> None:
+    if not GEMINI_API_KEY:
+        print("GEMINI_API_KEY not set — skipping audit.")
+        sys.exit(0)
+
     docs = collect_docs()
     commits = recent_commits()
     findings = call_gemini(docs, commits)

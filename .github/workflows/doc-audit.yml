@@ -31,10 +31,18 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Install uv
+        if: steps.check.outputs.skip != 'true'
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        if: steps.check.outputs.skip != 'true'
+        run: uv sync
+
       - name: Run doc audit
         if: steps.check.outputs.skip != 'true'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-        run: python scripts/doc_audit.py
+        run: uv run python scripts/doc_audit.py

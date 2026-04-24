@@ -3,6 +3,8 @@ import json
 import os
 import subprocess
 import sys
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -63,9 +65,20 @@ Respond with a concise markdown list of findings. If there are no significant is
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req) as resp:
-        data = json.loads(resp.read())
-    return data["candidates"][0]["content"]["parts"][0]["text"]
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req) as resp:
+                data = json.loads(resp.read())
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and attempt < 2:
+                wait = 30 * (attempt + 1)
+                print(f"Rate limited (429), retrying in {wait}s...")
+                time.sleep(wait)
+            else:
+                print(f"Gemini API error {e.code}: {e.reason}")
+                sys.exit(0)
+    sys.exit(0)
 
 
 def open_github_issue(findings: str) -> None:

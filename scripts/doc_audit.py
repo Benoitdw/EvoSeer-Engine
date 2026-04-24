@@ -16,11 +16,30 @@ REPO = os.environ.get("REPO")
 GH_MODELS_URL = "https://models.inference.ai.azure.com/chat/completions"
 
 
+def collect_code_diff() -> str:
+    """Return the diff of Python source files changed in the last commit."""
+    result = subprocess.run(
+        ["git", "diff", "HEAD~1", "HEAD", "--", "evoseer/"],
+        capture_output=True, text=True, cwd=ROOT,
+    )
+    diff = result.stdout.strip()
+    # Cap at ~15 000 chars to stay within token limits
+    if len(diff) > 15_000:
+        diff = diff[:15_000] + "\n... (truncated)"
+    return diff
+
+
 def collect_docs() -> str:
+    """Return all documentation content, capped at ~10 000 chars."""
     parts = []
+    total_chars = 0
     for path in sorted(DOCS_DIR.rglob("*.mdx")):
+        content = path.read_text()
+        total_chars += len(content)
+        if total_chars > 10_000:
+            break
         rel = path.relative_to(ROOT)
-        parts.append(f"=== {rel} ===\n{path.read_text()}")
+        parts.append(f"=== {rel} ===\n{content}")
     return "\n\n".join(parts)
 
 
@@ -32,22 +51,28 @@ def recent_commits() -> str:
     return result.stdout.strip()
 
 
-def call_model(docs: str, commits: str) -> str:
+def call_model(docs: str, code_diff: str) -> str:
+    if not code_diff:
+        return "No significant issues found."
+
     prompt = f"""You are a documentation quality reviewer for a scientific Python project called EvoSeer Engine.
 
-Recent commits:
-{commits}
+The following Python source code was changed in the latest commit:
+<diff>
+{code_diff}
+</diff>
 
-Documentation files:
+Current documentation:
+<docs>
 {docs}
+</docs>
 
-Review the documentation for:
-1. Inconsistencies between docs and recent commits
-2. Broken or placeholder links
-3. Missing content (e.g. sections marked TODO or "coming soon" that could be filled)
-4. Unclear or misleading explanations
+Check whether the documentation needs to be updated to reflect the code changes. Look for:
+1. New classes, methods, or parameters in the diff that are not documented
+2. Renamed or removed things that are still mentioned in the docs
+3. Behaviour changes that contradict what the docs describe
 
-Respond with a concise markdown list of findings. If there are no significant issues, respond with exactly: "No significant issues found."
+Respond with a concise markdown list of doc updates needed. If the docs are already up to date, respond with exactly: "No significant issues found."
 """
     body = json.dumps({
         "model": "gpt-4o-mini",
@@ -104,9 +129,13 @@ def main() -> None:
         print("GITHUB_TOKEN not set — skipping audit.")
         sys.exit(0)
 
+    code_diff = collect_code_diff()
+    if not code_diff:
+        print("No Python source changes in last commit — skipping audit.")
+        sys.exit(0)
+
     docs = collect_docs()
-    commits = recent_commits()
-    findings = call_model(docs, commits)
+    findings = call_model(docs, code_diff)
     print(findings)
 
     if findings.strip() != "No significant issues found.":

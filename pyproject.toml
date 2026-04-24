@@ -17,6 +17,9 @@ dependencies = [
 [tool.setuptools.packages.find]
 include = ["evoseer*"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [dependency-groups]
 dev = [
     "ipynb>=0.5.1",

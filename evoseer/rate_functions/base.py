@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
 
-from evoseer.core.config import PluginConfig
+from evoseer.core.config import PluginConfig, RateFunctionConfig
 
 
 class RateFunction(ABC):
@@ -18,6 +19,9 @@ class RateFunction(ABC):
     The RateFunction is intentionally biology-agnostic: it only sees numeric
     scores and configuration metadata (weight, category, alpha).
     """
+
+    def __init__(self, config: RateFunctionConfig) -> None:
+        self._config = config
 
     @abstractmethod
     def compute_rates(

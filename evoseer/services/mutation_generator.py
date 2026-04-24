@@ -85,3 +85,15 @@ class UniformMutationGenerator(MutationGenerator):
             return []
         return self._rng.choice(self._ids, size=n, replace=True).tolist()
 
+
+class NoMutationGenerator(MutationGenerator):
+    """Generator that never produces new mutations — cells keep their founder state."""
+
+    name: str = "none"
+
+    def __init__(self, store: MutationStore, params: dict[str, Any]) -> None:
+        pass
+
+    def generate(self, mu: float) -> list[int]:
+        return []
+

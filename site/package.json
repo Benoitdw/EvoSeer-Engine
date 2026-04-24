@@ -1,0 +1,19 @@
+{
+  "name": "evoseer-site",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "notebooks": "python ../scripts/build_notebooks.py"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.30.6",
+    "astro": "^5.18.1",
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

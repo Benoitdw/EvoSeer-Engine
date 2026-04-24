@@ -1,0 +1,23 @@
+---
+title: Introduction
+description: What EvoSeer Engine is and what it does
+---
+
+EvoSeer Engine is a biologically-informed stochastic evolutionary simulator. It models a population of cells evolving through time via the **Gillespie algorithm**, where each cell carries mutations that affect its biological parameters (proliferation, senescence, immunogenicity, mutation rate, etc.).
+
+## Design principles
+
+- **Plugin architecture** — biological features are self-contained modules that can be added, removed, or swapped without touching the simulation engine
+- **Separation of concerns** — simulation engine, rate computation, mutation generation, and recording are independent components
+- **Configuration-driven** — a YAML file controls which plugins are active, their parameters, and how they connect
+
+## Layers
+
+| Layer | Responsibility |
+|-------|---------------|
+| Data / State | `Cell`, `CellState`, `PluginState` |
+| Feature Plugins | `FeaturePlugin` ABC + concrete implementations |
+| Rate Functions | Translate plugin scores into birth/death rates |
+| Services | `MutationStore`, `MutationGenerator` |
+| Engine | Gillespie event loop |
+| Recording | Events, snapshots, final state |

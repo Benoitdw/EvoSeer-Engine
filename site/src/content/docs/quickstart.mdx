@@ -1,0 +1,38 @@
+---
+title: Quick Start
+description: Run your first simulation
+---
+
+## Run with default config
+
+```bash
+uv run python -m evoseer
+```
+
+## Run with a custom config
+
+```bash
+uv run python -m evoseer --config my_config.yaml
+```
+
+## Minimal config
+
+```yaml
+simulation:
+  max_cells: 1000
+  max_time: 100.0
+  seed: 42
+
+rate_functions:
+  baseline_birth_rate: 0.5
+  baseline_death_rate: 0.3
+
+plugins: []
+```
+
+## Output
+
+The recorder saves:
+- All events (division, death, driver mutation)
+- Snapshots at configurable intervals
+- Final cell population state

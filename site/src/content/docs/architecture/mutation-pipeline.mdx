@@ -1,0 +1,85 @@
+---
+title: Mutation Pipeline
+description: How mutations are assigned to daughter cells at each division event
+---
+
+This document describes how new mutations are assigned to daughter cells at each division event, and the design rationale behind the separation of responsibilities.
+
+## Overview
+
+Mutation assignment involves two independent concerns:
+
+1. **How many mutations does this cell get?** — determined by the cell's biological state (DNA repair capacity, replication stress, etc.)
+2. **Which mutations are they?** — determined by the tissue-specific mutational process (SBS signatures, uniform baseline, etc.)
+
+These two concerns map to two separate components:
+
+| Component | Responsibility | Configured via |
+|-----------|---------------|----------------|
+| `mutation_rate` plugin | Computes μ_i, the per-division rate for cell i | `plugins:` block |
+| `MutationGenerator` | Given μ_i, draws count + samples mutation IDs | `mutation_generator:` block |
+
+The engine's only interface is:
+
+```python
+mu_i = get_score(cell, mutation_rate_plugin)      # float
+new_mutations = mutation_generator.generate(mu_i) # list[int]
+```
+
+## The `mutation_rate` plugin
+
+Any plugin with `target: mutation_rate` acts as the per-cell mutation rate source. Its `compute_score()` returns a non-negative float μ_i for the current cell.
+
+```yaml
+plugins:
+  mutation_rate:
+    type: constant_rate
+    target: mutation_rate
+    params:
+      mu: 0.5
+```
+
+## The `MutationGenerator`
+
+`MutationGenerator` is an ABC with two mandatory methods:
+
+```python
+class MutationGenerator(ABC):
+    name: str
+
+    @abstractmethod
+    def __init__(self, store: MutationStore, params: dict) -> None: ...
+
+    @abstractmethod
+    def generate(self, mu: float) -> list[int]: ...
+```
+
+### Why Poisson lives in the generator, not the engine
+
+The Poisson draw (`n ~ Poisson(μ_i)`) is a modelling choice. Keeping it in the engine would mean any change to the count distribution requires editing the simulation core. Keeping it in `generate()` means it is a one-class change, fully isolated from the loop.
+
+## Built-in generators
+
+### `uniform`
+
+```yaml
+mutation_generator:
+  type: uniform
+  params:
+    seed: 42
+```
+
+- Count: `n ~ Poisson(μ)`
+- IDs: sampled uniformly with replacement over all mutations in the store
+
+### `cosmic` *(Phase 2)*
+
+```yaml
+mutation_generator:
+  type: cosmic
+  params:
+    tissue: "Skin-Melanoma"
+```
+
+- Count: `n ~ Poisson(μ)`
+- IDs: sampled proportionally to COSMIC SBS signature weights for the target tissue

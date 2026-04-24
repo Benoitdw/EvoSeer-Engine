@@ -1,0 +1,72 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+---
+<StarlightPage frontmatter={{ title: 'EvoSeer Engine', template: 'splash', hero: {
+  tagline: 'Biologically-informed stochastic evolutionary simulator based on the Gillespie algorithm.',
+  actions: [
+    { text: 'Get started', link: '/EvoSeerEngine/introduction/', icon: 'right-arrow', variant: 'primary' },
+    { text: 'GitHub', link: 'https://github.com/bdewitte/EvoSeerEngine', icon: 'github' },
+  ],
+} }}>
+
+<div class="card-grid">
+  <a class="card" href="/EvoSeerEngine/introduction/">
+    <span class="card-icon">📖</span>
+    <h3>Documentation</h3>
+    <p>Architecture, design decisions, and API reference.</p>
+  </a>
+  <a class="card" href="/EvoSeerEngine/notebooks/birth-death/">
+    <span class="card-icon">📓</span>
+    <h3>Notebooks</h3>
+    <p>Interactive tutorials and simulation examples.</p>
+  </a>
+  <a class="card" href="/EvoSeerEngine/visualizer/">
+    <span class="card-icon">🌿</span>
+    <h3>Visualizer</h3>
+    <p>Load a simulation output to explore phylogenetic trees and population dynamics.</p>
+  </a>
+</div>
+
+</StarlightPage>
+
+<style>
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1.5rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.75rem;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .card:hover {
+    border-color: var(--sl-color-accent);
+    background: var(--sl-color-accent-low);
+  }
+
+  .card-icon {
+    font-size: 1.75rem;
+  }
+
+  .card h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--sl-color-white);
+  }
+
+  .card p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--sl-color-gray-2);
+  }
+</style>

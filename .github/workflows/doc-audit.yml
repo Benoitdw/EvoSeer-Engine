@@ -1,0 +1,40 @@
+name: Nightly Doc Audit
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for recent push
+        id: check
+        run: |
+          COMMITS=$(git log --since="24 hours ago" --oneline)
+          if [ -z "$COMMITS" ]; then
+            echo "No commits in the last 24 hours, skipping audit."
+            echo "skip=true" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.check.outputs.skip != 'true'
+        with:
+          python-version: '3.13'
+
+      - name: Run doc audit
+        if: steps.check.outputs.skip != 'true'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: python scripts/doc_audit.py

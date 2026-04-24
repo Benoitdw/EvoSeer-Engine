@@ -1,17 +1,16 @@
 ---
 interface Props {
   src: string;
-  height?: string;
 }
-const { src, height = '800px' } = Astro.props;
+const { src } = Astro.props;
 ---
 <div class="notebook-embed">
   <iframe
     src={src}
     width="100%"
-    height={height}
     frameborder="0"
     loading="lazy"
+    class="notebook-iframe"
   />
 </div>
 
@@ -22,7 +21,26 @@ const { src, height = '800px' } = Astro.props;
     border-radius: 0.5rem;
     overflow: hidden;
   }
-  .notebook-embed iframe {
+  .notebook-iframe {
     display: block;
+    width: 100%;
+    min-height: 400px;
   }
 </style>
+
+<script>
+  document.querySelectorAll<HTMLIFrameElement>('.notebook-iframe').forEach((iframe) => {
+    iframe.addEventListener('load', () => {
+      const resize = () => {
+        try {
+          const h = iframe.contentDocument?.documentElement?.scrollHeight;
+          if (h && h > 0) iframe.style.height = h + 'px';
+        } catch {}
+      };
+      resize();
+      try {
+        new ResizeObserver(resize).observe(iframe.contentDocument!.documentElement);
+      } catch {}
+    });
+  });
+</script>

@@ -1,9 +1,8 @@
-"""Nightly doc audit via Gemini Flash. Opens a GitHub issue if findings."""
+"""Nightly doc audit via GitHub Models. Opens a GitHub issue if findings."""
 import json
 import os
 import subprocess
 import sys
-import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -11,14 +10,10 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 DOCS_DIR = ROOT / "site" / "src" / "content" / "docs"
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
 REPO = os.environ.get("REPO")
 
-GEMINI_URL = (
-    "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.0-flash-lite:generateContent?key={key}"
-)
+GH_MODELS_URL = "https://models.inference.ai.azure.com/chat/completions"
 
 
 def collect_docs() -> str:
@@ -37,7 +32,7 @@ def recent_commits() -> str:
     return result.stdout.strip()
 
 
-def call_gemini(docs: str, commits: str) -> str:
+def call_model(docs: str, commits: str) -> str:
     prompt = f"""You are a documentation quality reviewer for a scientific Python project called EvoSeer Engine.
 
 Recent commits:
@@ -55,30 +50,29 @@ Review the documentation for:
 Respond with a concise markdown list of findings. If there are no significant issues, respond with exactly: "No significant issues found."
 """
     body = json.dumps({
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.2},
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 1024,
+        "temperature": 0.2,
     }).encode()
 
     req = urllib.request.Request(
-        GEMINI_URL.format(key=GEMINI_API_KEY),
+        GH_MODELS_URL,
         data=body,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {GITHUB_TOKEN}",
+        },
         method="POST",
     )
-    for attempt in range(3):
-        try:
-            with urllib.request.urlopen(req) as resp:
-                data = json.loads(resp.read())
-            return data["candidates"][0]["content"]["parts"][0]["text"]
-        except urllib.error.HTTPError as e:
-            if e.code == 429 and attempt < 2:
-                wait = 30 * (attempt + 1)
-                print(f"Rate limited (429), retrying in {wait}s...")
-                time.sleep(wait)
-            else:
-                print(f"Gemini API error {e.code}: {e.reason}")
-                sys.exit(0)
-    sys.exit(0)
+    try:
+        with urllib.request.urlopen(req) as resp:
+            data = json.loads(resp.read())
+        return data["choices"][0]["message"]["content"]
+    except urllib.error.HTTPError as e:
+        body_text = e.read().decode()
+        print(f"GitHub Models API error {e.code}: {body_text}")
+        sys.exit(0)
 
 
 def open_github_issue(findings: str) -> None:
@@ -97,19 +91,22 @@ def open_github_issue(findings: str) -> None:
         },
         method="POST",
     )
-    with urllib.request.urlopen(req) as resp:
-        issue = json.loads(resp.read())
-    print(f"Issue opened: {issue['html_url']}")
+    try:
+        with urllib.request.urlopen(req) as resp:
+            issue = json.loads(resp.read())
+        print(f"Issue opened: {issue['html_url']}")
+    except urllib.error.HTTPError as e:
+        print(f"Failed to open issue {e.code}: {e.read().decode()}")
 
 
 def main() -> None:
-    if not GEMINI_API_KEY:
-        print("GEMINI_API_KEY not set — skipping audit.")
+    if not GITHUB_TOKEN:
+        print("GITHUB_TOKEN not set — skipping audit.")
         sys.exit(0)
 
     docs = collect_docs()
     commits = recent_commits()
-    findings = call_gemini(docs, commits)
+    findings = call_model(docs, commits)
     print(findings)
 
     if findings.strip() != "No significant issues found.":

@@ -1,0 +1,58 @@
+name: ERK
+kegg_id: hsa04010
+description: "MAPK/ERK signaling pathway, simplified to ERK axis (melanoma)"
+output_node: MAPK1
+
+sigmoid:
+  slope: 10.0
+  threshold: 0.20
+
+# weights = mutation prevalence in melanoma
+nodes:
+  EGFR:
+    gene_id: 1956
+    weight: 0.01
+  KRAS:
+    gene_id: 3845
+    weight: 0.02
+  NRAS:
+    gene_id: 4893
+    weight: 0.20
+  NF1:
+    gene_id: 4763
+    weight: 0.15
+  BRAF:
+    gene_id: 673
+    weight: 0.50
+  MAP2K1:
+    gene_id: 5604
+    weight: 0.02
+  MAPK1:
+    gene_id: 5594
+    weight: 0.01
+
+edges:
+  - from: EGFR
+    to: KRAS
+    type: activates
+  - from: EGFR
+    to: NRAS
+    type: activates
+  - from: NF1
+    to: KRAS
+    type: inhibits
+  - from: NF1
+    to: NRAS
+    type: inhibits
+  - from: KRAS
+    to: BRAF
+    type: activates
+  - from: NRAS
+    to: BRAF
+    type: activates
+  - from: BRAF
+    to: MAP2K1
+    type: activates
+  - from: MAP2K1
+    to: MAPK1
+    type: activates

@@ -1,12 +1,19 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 
 export default defineConfig({
   site: 'https://benoitdw.github.io',
   base: '/EvoSeer-Engine',
+  markdown: {
+    remarkPlugins: [remarkMath],
+    rehypePlugins: [rehypeKatex],
+  },
   integrations: [
     starlight({
       title: 'EvoSeer Engine',
+      customCss: ['./node_modules/katex/dist/katex.min.css'],
       description: 'Biologically-informed stochastic evolutionary simulator',
       social: {
         github: 'https://github.com/bdewitte/EvoSeerEngine',
@@ -35,6 +42,17 @@ export default defineConfig({
                 { label: 'Layer 4 — Services', slug: 'architecture/layers/services' },
                 { label: 'Layer 5 — Engine', slug: 'architecture/layers/engine' },
                 { label: 'Layer 6 — Recording', slug: 'architecture/layers/recording' },
+              ],
+            },
+          ],
+        },
+        {
+          label: 'Plugins',
+          items: [
+            {
+              label: 'Pathways',
+              items: [
+                { label: 'Pathway Plugin', slug: 'plugins/pathway' },
               ],
             },
           ],

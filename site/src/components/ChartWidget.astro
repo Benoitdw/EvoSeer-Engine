@@ -1,0 +1,107 @@
+---
+/**
+ * Generic canvas + controls layout for interactive charts.
+ * Place slider/result HTML in the default slot — it lands in .cw-controls.
+ */
+interface Props {
+  width?:  number;
+  height?: number;
+}
+const { width = 420, height = 260 } = Astro.props;
+---
+
+<div class="cw-wrap">
+  <div class="cw-layout">
+    <canvas class="cw-canvas" width={width} height={height}></canvas>
+    <div class="cw-controls">
+      <slot />
+    </div>
+  </div>
+</div>
+
+<style>
+  /* ── Structural layout (scoped to ChartWidget template) ── */
+  .cw-wrap {
+    border: 1px solid var(--sl-color-hairline-light, #e0e0e0);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin: 1.5rem 0;
+    background: var(--sl-color-bg-nav, #f8f8f8);
+  }
+  .cw-layout {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .cw-canvas {
+    border-radius: 6px;
+    flex-shrink: 0;
+    max-width: 100%;
+  }
+  .cw-controls {
+    flex: 1;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+
+  /* ── Generic control patterns (:global so they reach slot content) ── */
+  :global(.cw-row) {
+    display: flex;
+    gap: 1rem;
+  }
+  :global(.cw-row > .cw-group) { flex: 1; }
+  :global(.cw-group) {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  :global(.cw-label) {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.82rem;
+    color: var(--sl-color-text, #444);
+  }
+  :global(.cw-dot)  { font-size: 0.65rem; line-height: 1; }
+  :global(.cw-name) { flex: 1; }
+  :global(.cw-disp) {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    min-width: 3.4ch;
+    text-align: right;
+    font-size: 0.82rem;
+  }
+  :global(.cw-range) {
+    width: 100%;
+    cursor: pointer;
+    accent-color: #4C9BE8;
+  }
+  :global(.cw-result) {
+    margin-top: 0.2rem;
+    padding: 0.5rem 0.8rem;
+    background: var(--sl-color-bg, white);
+    border: 1px solid var(--sl-color-hairline, #ddd);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    font-size: 0.9rem;
+  }
+  :global(.cw-result-item) {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+  }
+  :global(.cw-result-label) {
+    color: var(--sl-color-text-accent, #666);
+    font-size: 0.82rem;
+  }
+  :global(.cw-result strong) {
+    font-variant-numeric: tabular-nums;
+    font-size: 1.05rem;
+  }
+  :global(.cw-arrow) { color: var(--sl-color-gray-3, #aaa); font-size: 1.1rem; }
+</style>

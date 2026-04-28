@@ -1,0 +1,121 @@
+---
+import ChartWidget from './ChartWidget.astro';
+---
+
+<div class="pw-widget">
+  <ChartWidget width={420} height={260}>
+
+    <div class="cw-row">
+      <div class="cw-group">
+        <div class="cw-label">
+          <span class="cw-name">slope</span>
+          <span class="cw-disp" data-pw="slope-disp">2.0</span>
+        </div>
+        <input class="cw-range" data-pw="slope" type="range" min="0.5" max="10" step="0.1" value="2">
+      </div>
+      <div class="cw-group">
+        <div class="cw-label">
+          <span class="cw-name">threshold</span>
+          <span class="cw-disp" data-pw="thresh-disp">0.50</span>
+        </div>
+        <input class="cw-range" data-pw="thresh" type="range" min="0" max="1.2" step="0.01" value="0.5">
+      </div>
+    </div>
+
+    <div class="cw-group">
+      <div class="cw-label">
+        <span class="cw-dot" style="color:#2E7D32">●</span>
+        <span class="cw-name">Σ act<sub>R</sub>&thinsp; (GOF activators)</span>
+        <span class="cw-disp" data-pw="act-disp">0.50</span>
+      </div>
+      <input class="cw-range" data-pw="act" type="range" min="0" max="1.2" step="0.01" value="0.5"
+             style="accent-color:#2E7D32">
+    </div>
+
+    <div class="cw-group">
+      <div class="cw-label">
+        <span class="cw-dot" style="color:#E65100">●</span>
+        <span class="cw-name">Σ inh<sub>R</sub>&thinsp; (LOF suppressors)</span>
+        <span class="cw-disp" data-pw="inh-disp">0.15</span>
+      </div>
+      <input class="cw-range" data-pw="inh" type="range" min="0" max="1.2" step="0.01" value="0.15"
+             style="accent-color:#E65100">
+    </div>
+
+    <div class="cw-result">
+      <span class="cw-result-item">
+        <span class="cw-result-label">A</span>
+        <strong data-pw="A-disp">0.65</strong>
+      </span>
+      <span class="cw-arrow">→</span>
+      <span class="cw-result-item">
+        <span class="cw-result-label">P<sub>R</sub></span>
+        <strong data-pw="PR-disp">0.574</strong>
+      </span>
+    </div>
+
+  </ChartWidget>
+</div>
+
+<script>
+import { CanvasChart } from '../utils/canvas-chart.ts';
+
+const X_GRID   = [0, 0.25, 0.5, 0.75, 1, 1.25];
+const Y_GRID   = [0, 0.25, 0.5, 0.75, 1];
+const X_LABELS = [0, 0.5, 1];
+const Y_LABELS = [0, 0.5, 1];
+
+const C_CURVE  = '#4C9BE8';
+const C_ACT    = '#2E7D32';
+const C_INH    = '#E65100';
+const C_POINT  = '#E53935';
+const C_THRESH = '#9C27B0';
+
+function initOne(root: HTMLElement): void {
+  const canvas = root.querySelector<HTMLCanvasElement>('.cw-canvas')!;
+  const chart  = new CanvasChart(canvas, {
+    xMin: -0.1, xMax: 1.4, yMin: 0, yMax: 1,
+    xLabel: 'A', yLabel: 'P_R',
+  });
+
+  const g = (key: string) => root.querySelector<HTMLElement>(`[data-pw="${key}"]`)!;
+  const slope  = g('slope')  as HTMLInputElement;
+  const thresh = g('thresh') as HTMLInputElement;
+  const act    = g('act')    as HTMLInputElement;
+  const inh    = g('inh')    as HTMLInputElement;
+
+  function draw(): void {
+    const k  = parseFloat(slope.value);
+    const t  = parseFloat(thresh.value);
+    const a  = parseFloat(act.value);
+    const ih = parseFloat(inh.value);
+    const A  = a + ih;
+    const PR = 1 / (1 + Math.exp(-k * (A - t)));
+
+    g('slope-disp').textContent  = k.toFixed(1);
+    g('thresh-disp').textContent = t.toFixed(2);
+    g('act-disp').textContent    = a.toFixed(2);
+    g('inh-disp').textContent    = ih.toFixed(2);
+    g('A-disp').textContent      = A.toFixed(3);
+    g('PR-disp').textContent     = PR.toFixed(3);
+
+    chart.clear();
+    chart.drawBackground(X_GRID, Y_GRID, { x: X_LABELS, y: Y_LABELS });
+    chart.vLine(t, C_THRESH, 0.55);
+    chart.plotCurve(x => 1 / (1 + Math.exp(-k * (x - t))), C_CURVE);
+    chart.barSegment(0, a,  C_ACT);
+    chart.barSegment(a, A,  C_INH);
+    chart.crosshair(A, PR, C_POINT);
+    chart.dot(A, PR, C_POINT);
+  }
+
+  [slope, thresh, act, inh].forEach(s => s.addEventListener('input', draw));
+  chart.watchTheme(draw);
+  draw();
+}
+
+document.querySelectorAll<HTMLElement>('.pw-widget:not([data-init])').forEach(root => {
+  root.dataset.init = '1';
+  initOne(root);
+});
+</script>

@@ -57,7 +57,8 @@ class FeaturePlugin(ABC):
         relevant pathway.
         """
         parent_ps = parent_state.plugin_states.get(self.name, PluginState())
-        return PluginState(_cached_score=parent_ps._cached_score, _dirty=False)
+        cached = parent_ps._cached_score
+        return PluginState(_cached_score=cached, _dirty=cached is None)
 
     # ------------------------------------------------------------------
     # Validated accessors

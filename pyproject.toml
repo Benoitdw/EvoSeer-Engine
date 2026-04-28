@@ -25,6 +25,7 @@ dev = [
     "ipynb>=0.5.1",
     "matplotlib>=3.10.9",
     "nbconvert>=7.17.1",
+    "networkx>=3.0",
     "notebook>=7.5.5",
     "pytest>=9.0.3",
     "tqdm>=4.67.3",

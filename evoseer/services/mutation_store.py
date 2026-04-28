@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 
 @dataclass
@@ -22,6 +22,7 @@ class MutationRecord:
     gene_name: str | None = None
     pathways: list[str] = field(default_factory=list)
     is_driver: bool | None = None
+    effect: Literal["GOF", "LOF"] | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
 

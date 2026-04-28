@@ -1,6 +1,10 @@
 ---
+import FishplotChart from './FishplotChart.astro';
+import CloneTreeChart from './CloneTreeChart.astro';
 ---
+
 <div class="visualizer-container">
+  <!-- Drop zone -->
   <div
     id="drop-zone"
     class="drop-zone"
@@ -13,50 +17,61 @@
         <polyline points="17 8 12 3 7 8"/>
         <line x1="12" y1="3" x2="12" y2="15"/>
       </svg>
-      <p class="drop-zone__text">Drop a simulation output file here</p>
+      <p class="drop-zone__text">Drop a <code>.evoseer.json</code> file here</p>
       <p class="drop-zone__subtext">or</p>
       <label class="drop-zone__button">
         Browse file
-        <input id="file-input" type="file" accept=".json,.csv,.tsv" hidden />
+        <input id="file-input" type="file" accept=".json" hidden />
       </label>
-      <p class="drop-zone__hint">Supported formats: JSON, CSV, TSV</p>
     </div>
   </div>
 
+  <!-- Content panel (hidden until file loaded) -->
   <div id="visualizer-content" class="visualizer-content" hidden>
     <div class="visualizer-toolbar">
       <span id="file-name" class="file-name"></span>
-      <button id="clear-btn" class="clear-btn">✕ Clear</button>
+      <div class="toolbar-right">
+        <div class="xmode-toggle" role="group" aria-label="X axis">
+          <button class="xmode-btn active" data-xmode="time">Time</button>
+          <button class="xmode-btn" data-xmode="step">Cycle</button>
+        </div>
+        <button id="clear-btn" class="clear-btn">✕ Clear</button>
+      </div>
     </div>
-    <div id="canvas-area" class="canvas-area">
-      <!-- Visualisation rendered here — coming soon -->
-      <p class="placeholder-text">Visualizer coming soon.</p>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="fishplot">Fishplot</button>
+      <button class="tab-btn" data-tab="clonetree">Clone Tree</button>
+    </div>
+
+    <div id="tab-fishplot" class="tab-panel">
+      <FishplotChart width={720} height={340} />
+    </div>
+    <div id="tab-clonetree" class="tab-panel" hidden>
+      <CloneTreeChart width={720} height={320} />
     </div>
   </div>
 </div>
 
 <style>
-  .visualizer-container {
-    width: 100%;
-    min-height: 500px;
-  }
+  .visualizer-container { width: 100%; min-height: 480px; }
 
+  /* ── Drop zone ── */
   .drop-zone {
     border: 2px dashed var(--sl-color-gray-4);
     border-radius: 0.75rem;
-    min-height: 400px;
+    min-height: 380px;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: border-color 0.2s, background-color 0.2s;
   }
-
   .drop-zone.drag-over {
     border-color: var(--sl-color-accent);
     background-color: var(--sl-color-accent-low);
   }
-
   .drop-zone__inner {
     display: flex;
     flex-direction: column;
@@ -66,19 +81,13 @@
     text-align: center;
     padding: 2rem;
   }
-
   .drop-zone__text {
-    font-size: 1.1rem;
+    font-size: 1.05rem;
     font-weight: 500;
     margin: 0;
     color: var(--sl-color-text);
   }
-
-  .drop-zone__subtext {
-    margin: 0;
-    font-size: 0.875rem;
-  }
-
+  .drop-zone__subtext { margin: 0; font-size: 0.875rem; }
   .drop-zone__button {
     display: inline-block;
     padding: 0.5rem 1.25rem;
@@ -90,31 +99,20 @@
     font-weight: 500;
     transition: opacity 0.15s;
   }
+  .drop-zone__button:hover { opacity: 0.85; }
 
-  .drop-zone__button:hover {
-    opacity: 0.85;
-  }
-
-  .drop-zone__hint {
-    margin: 0;
-    font-size: 0.75rem;
-    color: var(--sl-color-gray-3);
-  }
-
+  /* ── Toolbar ── */
   .visualizer-toolbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.5rem 0;
-    margin-bottom: 1rem;
+    padding: 0.4rem 0 0.8rem;
   }
-
   .file-name {
     font-size: 0.875rem;
     color: var(--sl-color-gray-2);
     font-family: var(--sl-font-mono);
   }
-
   .clear-btn {
     background: none;
     border: 1px solid var(--sl-color-gray-4);
@@ -124,69 +122,442 @@
     font-size: 0.8rem;
     color: var(--sl-color-text);
   }
-
-  .clear-btn:hover {
-    border-color: var(--sl-color-accent);
-    color: var(--sl-color-accent);
-  }
-
-  .canvas-area {
-    width: 100%;
-    min-height: 400px;
-    border: 1px solid var(--sl-color-gray-5);
-    border-radius: 0.5rem;
+  .clear-btn:hover { border-color: var(--sl-color-accent); color: var(--sl-color-accent); }
+  .toolbar-right {
     display: flex;
     align-items: center;
-    justify-content: center;
+    gap: 0.6rem;
+  }
+  .xmode-toggle {
+    display: flex;
+    border: 1px solid var(--sl-color-gray-4);
+    border-radius: 0.375rem;
+    overflow: hidden;
+  }
+  .xmode-btn {
+    background: none;
+    border: none;
+    padding: 0.2rem 0.65rem;
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: var(--sl-color-gray-2);
+    transition: background 0.12s, color 0.12s;
+  }
+  .xmode-btn + .xmode-btn {
+    border-left: 1px solid var(--sl-color-gray-4);
+  }
+  .xmode-btn.active {
+    background: var(--sl-color-accent);
+    color: var(--sl-color-white);
   }
 
-  .placeholder-text {
-    color: var(--sl-color-gray-3);
-    font-style: italic;
+  /* ── Tabs ── */
+  .tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--sl-color-gray-5);
+    margin-bottom: 1rem;
+  }
+  .tab-btn {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    padding: 0.45rem 1.1rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--sl-color-gray-2);
+    font-weight: 500;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .tab-btn:hover { color: var(--sl-color-text); }
+  .tab-btn.active {
+    color: var(--sl-color-accent);
+    border-bottom-color: var(--sl-color-accent);
   }
 </style>
 
 <script>
-  const dropZone = document.getElementById('drop-zone')!;
-  const fileInput = document.getElementById('file-input') as HTMLInputElement;
-  const content = document.getElementById('visualizer-content')!;
-  const fileName = document.getElementById('file-name')!;
-  const clearBtn = document.getElementById('clear-btn')!;
+import { CanvasChart } from '../utils/canvas-chart.ts';
 
-  function loadFile(file: File) {
-    fileName.textContent = file.name;
-    dropZone.hidden = true;
-    content.hidden = false;
-    // Future: parse file and render visualisation
+// ── Gene colour palette ──────────────────────────────────────────────────────
+
+const GENE_COLORS: Record<string, string> = {
+  BRAF:   '#1565C0',
+  NRAS:   '#2E7D32',
+  NF1:    '#E65100',
+  MAP2K1: '#6A1B9A',
+  KRAS:   '#00838F',
+  EGFR:   '#AD1457',
+};
+const FALLBACK_COLORS = ['#546E7A','#00695C','#4527A0','#558B2F','#6D4C41'];
+const WT_COLOR = '#9E9E9E';
+
+function cloneColor(gene: string | null, idx: number): string {
+  if (!gene) return WT_COLOR;
+  if (gene in GENE_COLORS) return GENE_COLORS[gene];
+  return FALLBACK_COLORS[idx % FALLBACK_COLORS.length];
+}
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+interface CloneNode {
+  id: string;
+  label: string;
+  gene: string | null;
+  effect: string | null;
+  acq_step: number;
+  acq_t: number;
+  final_size: number;
+}
+interface CloneEdge { parent: string; child: string; }
+interface EvoSeerData {
+  metadata: Record<string, unknown>;
+  snapshots: { step: number; t: number; n_alive: number }[];
+  clonal_fractions: ({ step: number; t: number } & Record<string, number>)[];
+  clone_tree: { nodes: CloneNode[]; edges: CloneEdge[] };
+}
+
+// ── DOM refs ─────────────────────────────────────────────────────────────────
+
+const dropZone     = document.getElementById('drop-zone')!;
+const fileInput    = document.getElementById('file-input') as HTMLInputElement;
+const content      = document.getElementById('visualizer-content')!;
+const fileNameEl   = document.getElementById('file-name')!;
+const clearBtn     = document.getElementById('clear-btn')!;
+const tabBtns      = document.querySelectorAll<HTMLButtonElement>('.tab-btn');
+const xmodeBtns    = document.querySelectorAll<HTMLButtonElement>('.xmode-btn');
+const tabFishplot  = document.getElementById('tab-fishplot')!;
+const tabClonetree = document.getElementById('tab-clonetree')!;
+const fishCanvas   = document.querySelector<HTMLCanvasElement>('.fishplot-canvas')!;
+const fishMode     = document.querySelector<HTMLInputElement>('.fishplot-mode')!;
+const cloneTreeSvg = document.querySelector<SVGSVGElement>('.clonetree-svg')!;
+
+let currentData: EvoSeerData | null = null;
+let fishChart: CanvasChart | null = null;
+let xMode: 'time' | 'step' = 'time';
+
+// ── File handling ─────────────────────────────────────────────────────────────
+
+function loadFile(file: File): void {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result as string) as EvoSeerData;
+      currentData = data;
+      fileNameEl.textContent = file.name;
+      dropZone.hidden = true;
+      content.hidden  = false;
+      renderAll(data);
+    } catch {
+      alert('Failed to parse file — expected a valid .evoseer.json');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function reset(): void {
+  currentData = null;
+  fishChart?.destroy();
+  fishChart = null;
+  dropZone.hidden  = false;
+  content.hidden   = true;
+  fileInput.value  = '';
+  fileNameEl.textContent = '';
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+
+tabBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    tabBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    tabFishplot.hidden  = btn.dataset.tab !== 'fishplot';
+    tabClonetree.hidden = btn.dataset.tab !== 'clonetree';
+    if (currentData && btn.dataset.tab === 'fishplot') renderFishplot(currentData);
+    if (currentData && btn.dataset.tab === 'clonetree') renderCloneTree(currentData);
+  });
+});
+
+// ── Rendering ────────────────────────────────────────────────────────────────
+
+function renderAll(data: EvoSeerData): void {
+  renderFishplot(data);
+  renderCloneTree(data);
+}
+
+function rerender(): void {
+  if (!currentData) return;
+  if (!tabFishplot.hidden)  renderFishplot(currentData);
+  if (!tabClonetree.hidden) renderCloneTree(currentData);
+}
+
+function renderFishplot(data: EvoSeerData): void {
+  const fracs = data.clonal_fractions;
+  if (!fracs.length) return;
+
+  const useStep = xMode === 'step';
+  const xs   = fracs.map(r => useStep ? r.step : r.t);
+  const xMax = xs[xs.length - 1];
+  const yMaxRaw = Math.max(...fracs.map(r =>
+    Object.entries(r)
+      .filter(([k]) => k !== 'step' && k !== 't')
+      .reduce((s, [, v]) => s + (v as number), 0),
+  ));
+
+  // Build ordered clone list from clone_tree nodes (wt first, then by acq_step)
+  const nodes = [...data.clone_tree.nodes].sort((a, b) =>
+    a.id === 'wt' ? -1 : b.id === 'wt' ? 1 : a.acq_step - b.acq_step,
+  );
+
+  const asFraction = fishMode.checked;
+  const yMax = asFraction ? 1.0 : yMaxRaw * 1.05;
+
+  fishChart?.destroy();
+  fishChart = new CanvasChart(fishCanvas, {
+    xMin: xs[0],
+    xMax: xMax * 1.02,
+    yMin: 0,
+    yMax: yMax,
+    xLabel: useStep ? 'Gillespie cycle' : 'Simulated time',
+    yLabel: asFraction ? 'Fraction' : 'N cells',
+  });
+
+  // X tick labels: up to 6 evenly spaced
+  const xTicks = evenTicks(xs[0], xMax, 6);
+  const yTicks = evenTicks(0, yMax, 5);
+
+  fishChart.clear();
+  fishChart.drawBackground(xTicks, yTicks, { x: xTicks, y: yTicks });
+
+  // Build series arrays: for each clone, y values at each snapshot
+  const series: number[][] = [];
+  const colors: string[] = [];
+
+  nodes.forEach((node, idx) => {
+    const key = node.id;
+    let ys: number[];
+    if (asFraction) {
+      ys = fracs.map(r => {
+        const total = Object.entries(r)
+          .filter(([k]) => k !== 'step' && k !== 't')
+          .reduce((s, [, v]) => s + (v as number), 0);
+        return total > 0 ? ((r[key] ?? 0) as number) / total : 0;
+      });
+    } else {
+      ys = fracs.map(r => (r[key] ?? 0) as number);
+    }
+    series.push(ys);
+    colors.push(node.id === 'wt' ? WT_COLOR : cloneColor(node.gene, idx));
+  });
+
+  fishChart.stackplot(xs, series, colors);
+
+  // Star markers at driver acquisition times
+  nodes.forEach((node, idx) => {
+    if (node.id === 'wt') return;
+    const color = cloneColor(node.gene, idx);
+    // Y position: cumulative stack height at acquisition point
+    const acqX   = useStep ? node.acq_step : node.acq_t;
+    const snapIdx = fracs.findIndex(r => (useStep ? r.step : r.t) >= acqX);
+    const snapRow = fracs[snapIdx >= 0 ? snapIdx : fracs.length - 1];
+    let stackY = 0;
+    for (let li = 0; li <= nodes.findIndex(n => n.id === node.id); li++) {
+      const k = nodes[li].id;
+      if (asFraction) {
+        const total = Object.entries(snapRow)
+          .filter(([ek]) => ek !== 'step' && ek !== 't')
+          .reduce((s, [, v]) => s + (v as number), 0);
+        stackY += total > 0 ? ((snapRow[k] ?? 0) as number) / total : 0;
+      } else {
+        stackY += (snapRow[k] ?? 0) as number;
+      }
+    }
+    fishChart!.star(acqX, stackY, color, 12);
+  });
+}
+
+function renderCloneTree(data: EvoSeerData): void {
+  const nodes = data.clone_tree.nodes;
+  const edges = data.clone_tree.edges;
+  if (!nodes.length) return;
+
+  const svg = cloneTreeSvg;
+  const W   = Number(svg.getAttribute('width'))  || 720;
+  const H   = Number(svg.getAttribute('height')) || 320;
+  const PAD = { top: 20, right: 80, bottom: 30, left: 120 };
+  const PW  = W - PAD.left - PAD.right;
+  const PH  = H - PAD.top  - PAD.bottom;
+
+  // X extent (time or step)
+  const useStep = xMode === 'step';
+  const xEnd   = useStep
+    ? Math.max(...data.snapshots.map(s => s.step))
+    : Math.max(...data.snapshots.map(s => s.t));
+  const xMin   = 0;
+  const nodeX  = (node: CloneNode) => useStep ? node.acq_step : node.acq_t;
+  const xScale = (v: number) => PAD.left + ((v - xMin) / (xEnd - xMin || 1)) * PW;
+
+  // Build parent map and assign y positions via DFS
+  const children: Record<string, string[]> = {};
+  const parentOf: Record<string, string>   = {};
+  for (const e of edges) {
+    children[e.parent] = children[e.parent] || [];
+    children[e.parent].push(e.child);
+    parentOf[e.child] = e.parent;
   }
 
-  function reset() {
-    dropZone.hidden = false;
-    content.hidden = true;
-    fileInput.value = '';
-    fileName.textContent = '';
+  // DFS order, sorting children by acq_t
+  const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
+  const order: string[] = [];
+  const dfs = (id: string) => {
+    order.push(id);
+    const kids = (children[id] || []).sort(
+      (a, b) => nodeX(nodeMap[a]) - nodeX(nodeMap[b]),
+    );
+    for (const kid of kids) dfs(kid);
+  };
+  dfs('wt');
+
+  const yStep  = PH / Math.max(order.length, 1);
+  const yPos: Record<string, number> = {};
+  order.forEach((id, i) => {
+    yPos[id] = PAD.top + yStep * i + yStep / 2;
+  });
+
+  // Circle size
+  const maxSize  = Math.max(...nodes.map(n => n.final_size), 1);
+  const rScale   = (n: number) => 4 + 14 * Math.sqrt(n / maxSize);
+
+  // Clear and rebuild SVG
+  svg.innerHTML = '';
+
+  const ns = 'http://www.w3.org/2000/svg';
+  const el = (tag: string, attrs: Record<string, string | number>) => {
+    const e = document.createElementNS(ns, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
+    return e;
+  };
+
+  // Axis
+  svg.appendChild(el('line', {
+    x1: PAD.left, y1: H - PAD.bottom,
+    x2: W - PAD.right, y2: H - PAD.bottom,
+    stroke: 'var(--sl-color-gray-4, #aaa)', 'stroke-width': 1,
+  }));
+
+  // X tick labels
+  const xTicks = evenTicks(xMin, xEnd, 5);
+  for (const t of xTicks) {
+    const x = xScale(t);
+    svg.appendChild(el('line', {
+      x1: x, y1: H - PAD.bottom, x2: x, y2: H - PAD.bottom + 4,
+      stroke: 'var(--sl-color-gray-4, #aaa)', 'stroke-width': 1,
+    }));
+    const txt = el('text', {
+      x, y: H - PAD.bottom + 14, 'text-anchor': 'middle',
+      fill: 'var(--sl-color-gray-2, #888)', 'font-size': '10',
+    });
+    txt.textContent = useStep ? String(Math.round(t)) : fmtT(t);
+    svg.appendChild(txt);
   }
 
-  dropZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropZone.classList.add('drag-over');
-  });
+  // Draw edges first (behind nodes)
+  for (const edge of edges) {
+    const pNode = nodeMap[edge.parent];
+    const cNode = nodeMap[edge.child];
+    if (!pNode || !cNode) continue;
+    const py = yPos[edge.parent];
+    const cx = xScale(nodeX(cNode));
+    const cy = yPos[edge.child];
+    // Vertical connector at child's acq_t from parent's y to child's y
+    svg.appendChild(el('line', {
+      x1: cx, y1: py, x2: cx, y2: cy,
+      stroke: 'var(--sl-color-gray-4, #ccc)',
+      'stroke-width': 1.5,
+      'stroke-dasharray': '4 3',
+    }));
+  }
 
-  dropZone.addEventListener('dragleave', () => {
-    dropZone.classList.remove('drag-over');
-  });
+  // Draw horizontal lines + circles + labels
+  for (const node of nodes) {
+    const x0 = xScale(node.id === 'wt' ? 0 : nodeX(node));
+    const x1 = xScale(xEnd);
+    const y  = yPos[node.id];
+    const color = node.id === 'wt' ? WT_COLOR : cloneColor(node.gene, order.indexOf(node.id));
 
-  dropZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropZone.classList.remove('drag-over');
-    const file = e.dataTransfer?.files[0];
-    if (file) loadFile(file);
-  });
+    // Horizontal line
+    svg.appendChild(el('line', {
+      x1: x0, y1: y, x2: x1, y2: y,
+      stroke: color, 'stroke-width': 2,
+    }));
 
-  fileInput.addEventListener('change', () => {
-    const file = fileInput.files?.[0];
-    if (file) loadFile(file);
-  });
+    // Terminal circle (size ∝ √final_size)
+    const r = rScale(node.final_size);
+    const circle = el('circle', {
+      cx: x1, cy: y, r,
+      fill: color, opacity: 0.85,
+    });
+    // Tooltip
+    const titleEl = el('title', {});
+    titleEl.textContent = `${node.label}\nfinal: ${node.final_size} cells\nacq_step: ${node.acq_step}`;
+    circle.appendChild(titleEl);
+    svg.appendChild(circle);
 
-  clearBtn.addEventListener('click', reset);
+    // Node label (left of line)
+    const label = el('text', {
+      x: x0 - 6, y: y + 4,
+      'text-anchor': 'end',
+      fill: 'var(--sl-color-text, #333)',
+      'font-size': '11',
+    });
+    label.textContent = node.label;
+    svg.appendChild(label);
+  }
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+
+function evenTicks(lo: number, hi: number, n: number): number[] {
+  if (hi <= lo) return [lo];
+  const step = (hi - lo) / (n - 1);
+  return Array.from({ length: n }, (_, i) => lo + i * step);
+}
+
+function fmtT(t: number): string {
+  if (t === 0) return '0';
+  if (t >= 1000) return (t / 1000).toFixed(1) + 'k';
+  return t < 0.01 ? t.toExponential(1) : t.toFixed(t < 1 ? 3 : 1);
+}
+
+// ── Event wiring ──────────────────────────────────────────────────────────────
+
+fishMode.addEventListener('change', () => {
+  if (currentData) renderFishplot(currentData);
+});
+
+xmodeBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    xmodeBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    xMode = btn.dataset.xmode as 'time' | 'step';
+    rerender();
+  });
+});
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer?.files[0];
+  if (file) loadFile(file);
+});
+
+fileInput.addEventListener('change', () => {
+  const file = fileInput.files?.[0];
+  if (file) loadFile(file);
+});
+
+clearBtn.addEventListener('click', reset);
 </script>

@@ -53,6 +53,7 @@ export default defineConfig({
               label: 'Pathways',
               items: [
                 { label: 'Pathway Plugin', slug: 'plugins/pathway' },
+                { label: 'OIS Plugin', slug: 'plugins/ois' },
               ],
             },
           ],

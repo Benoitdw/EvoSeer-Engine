@@ -48,6 +48,20 @@ class FeaturePlugin(ABC):
         """Compute and return the plugin score for a cell."""
         ...
 
+    def on_mutation_acquired(
+        self, mut_id: int, cell_state: CellState, step: int
+    ) -> None:
+        """Called after a new mutation is assigned to a cell. Override to react."""
+
+    def compute_senescence_hazard(
+        self, cell_state: CellState, ctx: SimContext
+    ) -> float:
+        """Return λ_i^OIS for senescence-target plugins. Default: 0."""
+        return 0.0
+
+    def on_senescence(self, cell_state: CellState) -> None:
+        """Called when this plugin's senescence hazard fires. Override to set flags."""
+
     def on_division(self, parent_state: CellState, ctx: SimContext) -> PluginState:
         """
         Handle a division event. Mutate parent_state in place if needed.

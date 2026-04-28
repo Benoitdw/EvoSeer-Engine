@@ -1,0 +1,184 @@
+---
+title: OIS Pathway Plugin
+description: OISPlugin — how Oncogene-Induced Senescence is modelled as a stochastic hazard driven by genotypic susceptibility and a per-cell division counter
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Oncogene-Induced Senescence (OIS) is the primary barrier between a benign nevus and melanoma. When a melanocyte acquires a strong oncogenic mutation (e.g. BRAF V600E), the cell's own sensing machinery can detect the anomalous proliferative signal and permanently arrest the cell cycle. EvoSeer models OIS as two decoupled components: a **genotypic susceptibility score S_i** and a **stochastic firing hazard λ_i^OIS**.
+
+---
+
+## Two-component model
+
+$$
+\lambda_i^{\mathrm{OIS}}(t) = S_i \cdot \lambda_0 \cdot \mathrm{Hill}(k_i,\, K,\, n)
+\qquad\text{(Eq. 2.10)}
+$$
+
+| Symbol | Type | Meaning |
+|--------|------|---------|
+| $S_i$ | `float ∈ (0,1)` | Genotypic susceptibility — how armed the OIS machinery is |
+| $k_i$ | `int ≥ 0` | Divisions undergone since first OIS-triggering mutation |
+| $\lambda_0$ | `float` | Overall rate scale (YAML `ois.lambda_0`) |
+| $K$ | `float` | Half-saturation division count (YAML `ois.K_0`) |
+| $n$ | `float` | Hill coefficient (YAML `ois.n`) |
+
+When $\lambda_i^{\mathrm{OIS}}$ fires (a third Gillespie event type alongside birth and death), the cell is **permanently arrested**: birth rate → 0, death rate unchanged.
+
+<Aside type="note">
+Hill(0, K, n) = 0 — a cell that has just acquired its first driver has zero hazard until it starts dividing. The replicative stress that drives OIS accumulates through division cycles, not real time (H2 hypothesis).
+</Aside>
+
+---
+
+## Genotypic susceptibility S_i
+
+$S_i$ follows the same sigmoid formula as the [Pathway Plugin](/EvoSeer-Engine/plugins/pathway/):
+
+$$
+S_i = \sigma\!\left(\sum_{g \,\in\, \mathrm{OIS_{act}}} \omega_g \cdot x_g^{\mathrm{GOF}} \;-\; \sum_{g \,\in\, \mathrm{OIS_{inh}}} \omega_g \cdot x_g^{\mathrm{LOF}}\right)
+$$
+
+$$
+\sigma(A) = \frac{1}{1 + e^{-\,\mathrm{slope}\,\times\,A}}
+$$
+
+| Term | Meaning |
+|------|---------|
+| $\mathrm{OIS_{act}}$ | Pro-senescence genes — GOF activates OIS (BRAF, NRAS, KRAS) |
+| $\mathrm{OIS_{inh}}$ | Anti-senescence genes — LOF **subtracts** from $A$, reducing $S_i$ (CDKN2A, TP53) |
+
+The key difference from the ERK pathway: $\mathrm{OIS_{inh}}$ genes are **suppressors** — their LOF removes OIS machinery and pushes $S_i$ toward 0. This is encoded in the YAML as a separate `suppressors` block (see below).
+
+### Intuition
+
+| Cell genotype | A | S_i | Interpretation |
+|---|---|---|---|
+| Wild-type | 0 | 0.5 | Machinery armed but unengaged |
+| BRAF GOF | +0.50 | ≈ 0.88 | Fully armed, ready to fire |
+| CDKN2A LOF | −1.50 | ≈ 0.05 | Machinery dismantled — OIS escape |
+| BRAF GOF + CDKN2A LOF | −1.00 | ≈ 0.07 | Escape despite oncogenic drive |
+
+<Aside type="tip">
+The **sigmoid threshold is 0** (not 0.5 as in ERK). This means a WT cell with no mutations already has $S_i = 0.5$ — the OIS machinery is constitutively present and waiting for a signal, rather than being off by default.
+</Aside>
+
+---
+
+## Division counter k_i
+
+$k_i$ is a per-cell counter that tracks replicative stress accumulated since the first OIS-triggering mutation.
+
+**Propagation at division** (both parent and child receive the same incremented value):
+
+$$
+k_{\mathrm{parent}} \leftarrow k_{\mathrm{parent}} + 1 \qquad k_{\mathrm{child}} = k_{\mathrm{parent}}
+$$
+
+**Reset on new OIS-triggering mutation**: when a cell acquires a GOF mutation in an $\mathrm{OIS_{act}}$ gene, $k$ resets to 0 and the acquisition step is recorded as $t_{\mathrm{trigger}}$.
+
+This state is stored in `OISPluginState`, a subclass of `PluginState`:
+
+```python
+@dataclass
+class OISPluginState(PluginState):
+    k:            int      = 0     # divisions since first OIS-triggering mutation
+    t_trigger:    int|None = None  # step at which triggering mutation was acquired
+    is_senescent: bool     = False
+```
+
+This is the canonical example of why `CellState.plugin_states` holds subclassable objects rather than plain floats — `k` and `is_senescent` must survive cell divisions and cannot be derived from the mutation set alone.
+
+---
+
+## Plugin target: `"senescence"`
+
+`MelanocyteOISPlugin` uses `target: "senescence"` in the YAML config. This is a third plugin target type (alongside `"rate_function"` and `"mutation_rate"`):
+
+- Scores are computed and cached normally (S_i via the sigmoid formula).
+- The score is **not** passed to `WeightedSumRate` — it feeds into $\lambda_i^{\mathrm{OIS}}$ instead.
+- The Gillespie engine adds the OIS hazard to the per-cell rate pool as a third event.
+
+When the event fires, `WeightedSumRate.compute_rates()` receives `senescent=True` and returns `(0.0, baseline_death_rate)` regardless of all other plugin scores.
+
+---
+
+## YAML definition format
+
+The OIS YAML follows the same schema as `erk.yaml`, with two additions: an `ois` block for hazard parameters, and a `suppressors` block for anti-senescence genes.
+
+```yaml
+name: OIS
+output_node: CDKN2A
+
+sigmoid:
+  slope: 4.0
+  threshold: 0.0   # WT: S_i = σ(0) = 0.5
+
+ois:
+  lambda_0: 0.01   # overall rate scale
+  K_0: 15.0        # half-saturation (divisions)
+  n: 2             # Hill coefficient
+
+nodes:
+  BRAF:   { gene_id: 673,  weight: 0.50 }
+  NRAS:   { gene_id: 4893, weight: 0.20 }
+  KRAS:   { gene_id: 3845, weight: 0.05 }
+
+edges:
+  - { from: BRAF, to: CDKN2A, type: activates }
+  - { from: NRAS, to: CDKN2A, type: activates }
+  - { from: KRAS, to: CDKN2A, type: activates }
+
+suppressors:                              # LOF subtracts from weighted sum
+  CDKN2A: { gene_id: 1029, weight: 1.50 }
+  TP53:   { gene_id: 7157, weight: 0.50 }
+```
+
+The `edges` and `nodes` sections are processed by the same DFS role-derivation as ERK — BRAF, NRAS, KRAS are automatically identified as $\mathrm{OIS_{act}}$ (even parity to output node). The `suppressors` section is orthogonal: these genes are not disinhibitors (which *add* on LOF) but anti-activators that *subtract* on LOF.
+
+---
+
+## Class hierarchy
+
+```
+FeaturePlugin  (evoseer/plugins/base.py)
+    └── PathwayPlugin  (evoseer/plugins/pathway/__init__.py)
+            └── OISPlugin  (evoseer/plugins/ois/__init__.py)
+                    └── MelanocyteOISPlugin  (evoseer/plugins/ois/melanocyte.py)
+```
+
+### `OISPlugin` — abstract base
+
+Inherits all of `PathwayPlugin` (YAML loading, DFS, sigmoid). Adds:
+
+- **`init_state()`** → fresh `OISPluginState(k=0)`
+- **`on_division()`** → increments `k` on parent; child inherits same value
+- **`on_mutation_acquired(mut_id, cell_state, step)`** → resets `k=0` if new mutation is GOF in $\mathrm{OIS_{act}}$
+- **`compute_senescence_hazard(cell_state, ctx)`** → $S_i \cdot \lambda_0 \cdot \text{Hill}(k, K, n)$
+- **`on_senescence(cell_state)`** → sets `is_senescent = True`
+
+### `MelanocyteOISPlugin` — concrete
+
+```python
+class MelanocyteOISPlugin(OISPlugin):
+    name = "melanocyte_ois"
+    pathway_file = Path(__file__).parent / "data" / "melanocyte_ois.yaml"
+    involved_pathways = ["OIS"]
+```
+
+---
+
+## OIS escape and melanoma progression
+
+A cell escapes OIS when $S_i \approx 0$, which occurs when anti-senescence mutations accumulate:
+
+- **CDKN2A biallelic loss** (two LOF mutations, weight 1.50 each): $A \leq -3.0$ → $S_i \approx 0$
+- **TP53 LOF** (weight 0.50): partial suppression, accelerates escape when combined with CDKN2A loss
+
+An escaped cell has $\lambda_i^{\mathrm{OIS}} \approx 0$ regardless of $k_i$ — it never arrests. Its descendants form the clonal expansion that characterises melanoma progression.
+
+<Aside type="note">
+In the nevi model, immunogenicity is negligible and the dominant dynamic is the balance between OIS firing (nevus arrest) and OIS escape (malignant progression). The parameters $\lambda_0$, $K$, and $n$ will be calibrated by ABC against the ISIC 2024 nevus size distribution.
+</Aside>

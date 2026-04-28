@@ -1,0 +1,281 @@
+---
+title: Pathway Plugins
+description: PathwayPlugin ABC — how signalling pathway topology drives cell fitness scores
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import PathwayWidget from '../../../components/PathwayWidget.astro';
+
+Pathway plugins compute a **pathway activation score P_R ∈ (0, 1)** for each cell at each simulation step. P_R represents how strongly the cell's driver mutations activate the signalling pathway — the higher it is, the more the pathway is "on". That score then feeds into the birth rate via the standard `weight` / `category` mechanism described in [Layer 2 — Feature Plugins](/EvoSeer-Engine/architecture/layers/plugins/).
+
+The key idea is that the plugin does not need to know in advance which genes are activators and which are suppressors — it **derives those roles automatically** from the directed graph encoded in a YAML definition file.
+
+---
+
+## Activation formula
+
+The score is computed in two steps: first accumulate a weighted sum $A$ from the cell's driver mutations, then map it through a sigmoid to get $P_R \in (0,1)$.
+
+$$
+A = \sum_{g \,\in\, \mathrm{act}_R} w_g \cdot x_g^{\text{GOF}} \;+\; \sum_{g \,\in\, \mathrm{inh}_R} w_g \cdot x_g^{\text{LOF}}
+\qquad\longrightarrow\qquad
+P_R = \sigma_R(A)
+$$
+
+| Term | Type | Meaning |
+|------|------|---------|
+| $x_g^{\text{GOF}}$ | `{0, 1}` | 1 if the cell carries a GOF mutation in gene g |
+| $x_g^{\text{LOF}}$ | `{0, 1}` | 1 if the cell carries a LOF mutation in gene g |
+| $w_g$ | `float` | Weight of gene g — calibrated to its mutation **prevalence in the tumour type** |
+| $\mathrm{act}_R$ | set of genes | Genes whose **GOF** activates the pathway output (activators) |
+| $\mathrm{inh}_R$ | set of genes | Genes whose **LOF** activates the pathway output via disinhibition (suppressors) |
+| $A$ | `float ≥ 0` | Weighted sum — total driver signal accumulated by the cell |
+| $P_R$ | `float ∈ (0,1)` | **Output**: pathway activation score, fed into the birth rate |
+| $\sigma_R$ | sigmoid | Compresses $A$ into $(0,1)$, applying diminishing returns |
+
+Both terms of $A$ are additive: an activator contributes via GOF, a suppressor contributes via LOF (removing inhibition has the same effect as adding activation downstream). The two mechanisms converge on the same output.
+
+### Sigmoid function
+
+$$
+\sigma_R(A) = \frac{1}{1 + e^{-\,\text{slope}\,\times\,(A - \text{threshold})}}
+$$
+
+- **slope** — steepness of the transition. A high slope means a single strong driver is nearly as effective as two weak ones combined.
+- **threshold** — the value of $A$ at which $P_R = 0.5$ (the inflection point of the sigmoid). Set to roughly the weight of the dominant driver so that one canonical mutation (e.g. BRAF V600E, $w = 0.50$) already produces $P_R \approx 0.5$.
+
+<PathwayWidget />
+
+<Aside type="note">
+A wild-type cell has no driver mutations, so $A = 0$ and $P_R = \sigma(-\text{threshold}) \approx 0$. Its background proliferation comes entirely from `baseline_birth_rate` in `WeightedSumRate`, independently of the pathway plugin.
+</Aside>
+
+---
+
+## YAML definition format
+
+Each pathway is described by a single YAML file stored in `evoseer/plugins/pathway/data/`. The file encodes the graph topology and all parameters needed to compute P_R.
+
+```yaml
+name: ERK                            # pathway identifier — must match MutationRecord.pathways
+kegg_id: hsa04010                    # optional KEGG reference
+description: "MAPK/ERK signaling…"
+
+output_node: MAPK1                   # the node whose activation = pathway output
+
+sigmoid:
+  slope: 2.0
+  threshold: 0.5
+
+nodes:
+  BRAF:
+    gene_id: 673     # NCBI gene ID — matched against MutationRecord.gene_id
+    weight: 0.50     # mutation prevalence in the tumour type (melanoma here)
+  NRAS:
+    gene_id: 4893
+    weight: 0.20
+  NF1:
+    gene_id: 4763
+    weight: 0.15
+  # …
+
+edges:
+  - from: NRAS
+    to:   BRAF
+    type: activates          # or "inhibits"
+  - from: NF1
+    to:   NRAS
+    type: inhibits
+  # …
+```
+
+### Nodes
+
+Each node represents a gene in the pathway.
+
+| Field | Description |
+|-------|-------------|
+| `gene_id` | NCBI Entrez gene ID — used to match against `MutationRecord.gene_id` at scoring time |
+| `weight` | Contribution to the pathway signal if mutated. Calibrated to the observed mutation frequency in the tumour type so that the most commonly mutated gene (BRAF, w=0.50 in melanoma) anchors the scale |
+
+### Edges
+
+Edges encode the **causal wiring** of the pathway.
+
+| `type` | Biological meaning | Effect on parity |
+|--------|-------------------|-----------------|
+| `activates` | upstream node promotes downstream activity | +0 inhibit edges |
+| `inhibits` | upstream node suppresses downstream activity | +1 inhibit edge |
+
+The edge list defines a DAG. Only edges relevant to the simplified model need to be included — unmapped nodes are silently ignored at scoring time.
+
+---
+
+## Role derivation — `derive_roles()`
+
+$\mathrm{act}_R$ and $\mathrm{inh}_R$ are not stored in the YAML. They are **computed once at plugin initialisation** by a DFS (Depth-First Search) over the DAG — a graph traversal that explores each path from a node all the way to the output before backtracking.
+
+### Algorithm
+
+For each node, find any path to `output_node` and count the number of `inhibits` edges along the way:
+
+- **Even parity** (0, 2, …) → the node activates the output when it itself is active → GOF mutation drives the pathway → node ∈ $\mathrm{act}_R$
+- **Odd parity** (1, 3, …) → the node inhibits the output (directly or via a chain) → **LOF** mutation removes that suppression → pathway is activated → node ∈ $\mathrm{inh}_R$
+
+### Example trace (ERK pathway)
+
+```
+NF1 →(inhibits)→ NRAS →(activates)→ BRAF →(activates)→ MAP2K1 →(activates)→ MAPK1
+```
+
+Inhibit-edge count from NF1 to MAPK1: **1** → odd parity → NF1 ∈ $\mathrm{inh}_R$.  
+A **LOF mutation in NF1** therefore contributes `w_{NF1} = 0.15` to the weighted sum.
+
+```
+BRAF →(activates)→ MAP2K1 →(activates)→ MAPK1
+```
+
+Inhibit-edge count from BRAF to MAPK1: **0** → even parity → BRAF ∈ $\mathrm{act}_R$.  
+A **GOF mutation in BRAF** contributes `w_{BRAF} = 0.50`.
+
+<Aside type="tip">
+Nodes that have no path to `output_node` are silently skipped — they are included in the YAML for documentation or future use but do not contribute to the score.
+</Aside>
+
+---
+
+## Scoring walkthrough
+
+Given a cell carrying **BRAF GOF** and **NF1 LOF**:
+
+$$
+A = w_{\text{BRAF}}^{\text{GOF}} + w_{\text{NF1}}^{\text{LOF}} = 0.50 + 0.15 = 0.65
+$$
+
+$$
+P_R = \frac{1}{1 + e^{-2.0 \times (0.65 - 0.50)}} = \frac{1}{1 + e^{-0.30}} \approx 0.574
+$$
+
+With a plugin config `weight: 5, category: proliferative`:
+
+$$
+\Delta b = 5 \times 0.574 = 2.87
+$$
+
+This is added to `baseline_birth_rate` by `WeightedSumRate`.
+
+---
+
+## Class hierarchy
+
+```
+FeaturePlugin  (evoseer/plugins/base.py)
+    └── PathwayPlugin  (evoseer/plugins/pathway/__init__.py)
+            └── ErkPathwayPlugin  (evoseer/plugins/pathway/erk.py)
+```
+
+### `PathwayPlugin` — abstract base
+
+Defined in `evoseer/plugins/pathway/__init__.py`. Handles everything: YAML loading, role derivation, and scoring. Subclasses only need three class attributes:
+
+```python
+class PathwayPlugin(FeaturePlugin, ABC):
+    pathway_file: ClassVar[Path]      # path to the YAML definition
+    name: str                         # runtime identifier
+    involved_pathways: list[str]      # triggers dirty-flag recompute on matching mutations
+```
+
+**`compute_score(cell_state, ctx) → float`**
+
+Iterates over `cell_state.mutations`, looks up each record in the `MutationStore`, and accumulates the weighted sum according to the gene's role (GOF→$\mathrm{act}_R$, LOF→$\mathrm{inh}_R$). Applies the sigmoid and returns P_R.
+
+Records without a `gene_id` (passengers) or without an `effect` annotation are skipped in O(1).
+
+### `ErkPathwayPlugin` — concrete implementation
+
+Defined in `evoseer/plugins/pathway/erk.py`. The entire implementation is three lines:
+
+```python
+class ErkPathwayPlugin(PathwayPlugin):
+    name = "erk_pathway"
+    pathway_file = Path(__file__).parent / "data" / "erk.yaml"
+    involved_pathways = ["ERK"]
+```
+
+All biological logic lives in the YAML and the parent class. Adding a new pathway means writing a new YAML and a four-line subclass.
+
+---
+
+## ERK / MAPK pathway (melanoma)
+
+The ERK pathway is the dominant oncogenic axis in melanoma, with ~60 % of tumours carrying a driver in this pathway.
+
+### Node weights and roles (derived)
+
+| Gene | NCBI ID | Weight | Role | Canonical mutation |
+|------|---------|--------|------|--------------------|
+| BRAF | 673 | 0.50 | Activator (GOF) | V600E (~50 % melanoma) |
+| NRAS | 4893 | 0.20 | Activator (GOF) | Q61R/K/L (~20 %) |
+| NF1 | 4763 | 0.15 | Suppressor (LOF) | truncating mutations (~15 %) |
+| MAP2K1 (MEK1) | 5604 | 0.02 | Activator (GOF) | rare |
+| KRAS | 3845 | 0.02 | Activator (GOF) | rare in melanoma |
+| EGFR | 1956 | 0.01 | Activator (GOF) | rare |
+| MAPK1 (ERK2) | 5594 | 0.01 | Output node | — |
+
+Weights sum to ~0.91, so a cell carrying the single strongest driver (BRAF GOF, $w=0.50$) produces:
+
+$$
+P_R = \sigma(0.50) = \frac{1}{1 + e^{-2.0 \times (0.50 - 0.50)}} = 0.50
+$$
+
+A cell carrying two cooperating mutations (NRAS GOF + NF1 LOF, $w=0.35$) produces:
+
+$$
+P_R = \sigma(0.35) = \frac{1}{1 + e^{-2.0 \times (0.35 - 0.50)}} \approx 0.43
+$$
+
+### Simplified DAG topology
+
+```
+EGFR ──activates──► KRAS ──activates──► BRAF ──activates──► MAP2K1 ──activates──► MAPK1
+  │                                       ▲
+  └──activates──► NRAS ──activates────────┘
+                    ▲
+NF1 ──inhibits──────┘
+NF1 ──inhibits──► KRAS
+```
+
+The pathway is deliberately simplified to the core RAS–RAF–MEK–ERK cascade. Feedback loops and cross-pathway crosstalk are not modelled in Phase 1.
+
+---
+
+## Adding a new pathway
+
+1. **Write the YAML** — place it in `evoseer/plugins/pathway/data/my_pathway.yaml`. Follow the same schema: `name`, `output_node`, `sigmoid`, `nodes` (with `gene_id` and `weight`), `edges`.
+
+2. **Create the subclass** — four lines in `evoseer/plugins/pathway/my_pathway.py`:
+
+```python
+from pathlib import Path
+from evoseer.plugins.pathway import PathwayPlugin
+
+class MyPathwayPlugin(PathwayPlugin):
+    name = "my_pathway"
+    pathway_file = Path(__file__).parent / "data" / "my_pathway.yaml"
+    involved_pathways = ["MY_PATHWAY"]
+```
+
+3. **Register it** in `evoseer/plugins/__init__.py`:
+
+```python
+from evoseer.plugins.pathway.my_pathway import MyPathwayPlugin
+
+REGISTRY: dict[str, type] = {
+    cls.name: cls for cls in [
+        ...,
+        MyPathwayPlugin,
+    ]
+}
+```
+
+4. **Annotate driver mutations** — make sure relevant `MutationRecord`s have `pathways=["MY_PATHWAY"]` and `effect="GOF"` or `"LOF"`. The plugin will only score records that carry an `effect` annotation.

@@ -29,3 +29,11 @@ class DriverEvent:
     step: int
     cell_id: int
     mutation_id: int
+
+
+@dataclass(frozen=True)
+class SenescenceEvent:
+    """A cell has entered permanent senescence (OIS fired)."""
+
+    step: int
+    cell_id: int

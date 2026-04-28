@@ -38,6 +38,7 @@ class PathwayDefinition:
     sigmoid_threshold: float
     nodes: dict[str, NodeDef]
     edges: list[EdgeDef]
+    suppressors: dict[str, NodeDef] = field(default_factory=dict)
     kegg_id: str | None = None
     description: str = ""
 
@@ -57,6 +58,13 @@ class PathwayDefinition:
             EdgeDef(from_node=e["from"], to_node=e["to"], type=e["type"])
             for e in data["edges"]
         ]
+        suppressors = {
+            name: NodeDef(
+                gene_id=attrs.get("gene_id"),
+                weight=float(attrs["weight"]),
+            )
+            for name, attrs in data.get("suppressors", {}).items()
+        }
         return cls(
             name=data["name"],
             kegg_id=data.get("kegg_id"),
@@ -66,6 +74,7 @@ class PathwayDefinition:
             sigmoid_threshold=float(data["sigmoid"]["threshold"]),
             nodes=nodes,
             edges=edges,
+            suppressors=suppressors,
         )
 
 
@@ -145,6 +154,16 @@ class PathwayPlugin(FeaturePlugin, ABC):
             for n, w in self._inh.items()
             if self._definition.nodes[n].gene_id is not None
         }
+        # Suppressors: LOF subtracts from weighted sum (e.g. CDKN2A in OIS)
+        self._suppressor_by_id: dict[int, float] = {
+            nd.gene_id: nd.weight
+            for nd in self._definition.suppressors.values()
+            if nd.gene_id is not None
+        }
+        self._suppressor_by_name: dict[str, float] = {
+            name: nd.weight
+            for name, nd in self._definition.suppressors.items()
+        }
 
     def compute_score(self, cell_state: CellState, ctx: SimContext) -> float:
         """P_R = σ_R( Σ w·x^GOF_act  −  Σ w·x^LOF_inh )"""
@@ -161,11 +180,13 @@ class PathwayPlugin(FeaturePlugin, ABC):
                     weighted_sum += self._act_by_id.get(record.gene_id, 0.0)
                 elif record.effect == "LOF":
                     weighted_sum += self._inh_by_id.get(record.gene_id, 0.0)
+                    weighted_sum -= self._suppressor_by_id.get(record.gene_id, 0.0)
             elif record.gene_name is not None:
                 if record.effect == "GOF":
                     weighted_sum += self._act.get(record.gene_name, 0.0)
                 elif record.effect == "LOF":
                     weighted_sum += self._inh.get(record.gene_name, 0.0)
+                    weighted_sum -= self._suppressor_by_name.get(record.gene_name, 0.0)
         return self._sigmoid(weighted_sum)
 
     def _sigmoid(self, x: float) -> float:

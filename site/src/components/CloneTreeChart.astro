@@ -1,0 +1,28 @@
+---
+interface Props {
+  width?:  number;
+  height?: number;
+}
+const { width = 700, height = 300 } = Astro.props;
+---
+
+<div class="clonetree-wrap">
+  <svg
+    class="clonetree-svg"
+    width={width}
+    height={height}
+    viewBox={`0 0 ${width} ${height}`}
+    xmlns="http://www.w3.org/2000/svg"
+  ></svg>
+</div>
+
+<style>
+  .clonetree-wrap {
+    width: 100%;
+    overflow-x: auto;
+  }
+  .clonetree-svg {
+    max-width: 100%;
+    display: block;
+  }
+</style>

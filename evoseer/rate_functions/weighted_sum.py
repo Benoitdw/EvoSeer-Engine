@@ -33,15 +33,22 @@ class WeightedSumRate(RateFunction):
         scores: dict[str, float],
         plugin_configs: dict[str, PluginConfig],
         N: int,
+        senescent: bool = False,
     ) -> tuple[float, float]:
         """
         Return (birth_rate, death_rate) for a single cell.
+
+        If ``senescent`` is True, birth is hard-clamped to 0 regardless of
+        plugin scores — senescence is irreversible and overrides all other signals.
 
         Only plugins whose name appears in both ``scores`` and
         ``plugin_configs`` are included; extra keys in either dict are
         silently ignored, which allows callers to pass the full plugin_configs
         dict without pre-filtering.
         """
+        if senescent:
+            return 0.0, max(0.0, self._baseline_death)
+
         birth = self._baseline_birth
         death = self._baseline_death
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from evoseer.engine.events import DeathEvent, DriverEvent, DivisionEvent
+from evoseer.engine.events import DeathEvent, DriverEvent, DivisionEvent, SenescenceEvent
 
 
 @dataclass
@@ -25,6 +25,7 @@ class SimulationResult:
     divisions: list[DivisionEvent] = field(default_factory=list)
     deaths: list[DeathEvent] = field(default_factory=list)
     drivers: list[DriverEvent] = field(default_factory=list)
+    senescence: list[SenescenceEvent] = field(default_factory=list)
 
     # Periodic population snapshots
     snapshots: list[Snapshot] = field(default_factory=list)
@@ -78,6 +79,10 @@ class Recorder:
     def record_driver(self, step: int, cell_id: int, mutation_id: int) -> None:
         """Log a driver acquisition event."""
         self._result.drivers.append(DriverEvent(step, cell_id, mutation_id))
+
+    def record_senescence(self, step: int, cell_id: int) -> None:
+        """Log a senescence event."""
+        self._result.senescence.append(SenescenceEvent(step, cell_id))
 
     # ------------------------------------------------------------------
     # Periodic snapshots

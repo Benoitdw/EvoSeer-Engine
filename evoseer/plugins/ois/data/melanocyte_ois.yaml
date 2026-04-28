@@ -1,0 +1,28 @@
+name: OIS
+description: "Oncogene-Induced Senescence pathway in melanocytes (CellAge-curated)"
+
+output_node: CDKN2A
+
+sigmoid:
+  slope: 4.0
+  threshold: 0.0   # WT: A=0 → S_i = σ(0) = 0.5 (armed but unengaged)
+
+ois:
+  lambda_0: 0.01
+  K_0: 15.0        # half-saturation (divisions)
+  n: 2             # Hill coefficient
+
+nodes:
+  BRAF:   { gene_id: 673,  weight: 0.50 }   # dominant driver (~50% melanoma nevi)
+  NRAS:   { gene_id: 4893, weight: 0.20 }   # second most common (~20%)
+  KRAS:   { gene_id: 3845, weight: 0.05 }
+  CDKN2A: { gene_id: 1029, weight: 0.10 }   # output node; GOF adds weakly
+
+edges:
+  - { from: BRAF,   to: CDKN2A, type: activates }
+  - { from: NRAS,   to: CDKN2A, type: activates }
+  - { from: KRAS,   to: CDKN2A, type: activates }
+
+suppressors:   # LOF of these genes subtracts from weighted sum → S_i ↓ (OIS escape)
+  CDKN2A: { gene_id: 1029, weight: 1.50 }   # biallelic loss → S_i → 0
+  TP53:   { gene_id: 7157, weight: 0.50 }

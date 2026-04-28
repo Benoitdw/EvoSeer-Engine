@@ -1,0 +1,45 @@
+---
+interface Props {
+  width?:  number;
+  height?: number;
+}
+const { width = 700, height = 340 } = Astro.props;
+---
+
+<div class="fishplot-wrap">
+  <div class="fishplot-toggle">
+    <label>
+      <input class="fishplot-mode" type="checkbox" />
+      Show as fraction
+    </label>
+  </div>
+  <canvas class="fishplot-canvas" width={width} height={height}></canvas>
+</div>
+
+<style>
+  .fishplot-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+  }
+  .fishplot-toggle {
+    font-size: 0.82rem;
+    color: var(--sl-color-text, #444);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .fishplot-toggle label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    cursor: pointer;
+    user-select: none;
+  }
+  .fishplot-canvas {
+    max-width: 100%;
+    display: block;
+    border-radius: 6px;
+  }
+</style>

@@ -1,0 +1,58 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+import Visualizer from '../components/Visualizer.astro';
+---
+
+<AppLayout title="EvoSeer — Visualizer">
+  <Fragment slot="head">
+  </Fragment>
+
+  <Fragment slot="topbar">
+    <label id="topbar-load-btn" class="topbar-load">
+      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      Load file
+      <input id="topbar-file-input" type="file" accept=".json" hidden />
+    </label>
+  </Fragment>
+
+  <Visualizer />
+</AppLayout>
+
+<style>
+  .topbar-load {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.75rem;
+    border: 1px solid #30363d;
+    border-radius: 0.375rem;
+    font-size: 0.8rem;
+    color: #8b949e;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .topbar-load:hover { color: #e6edf3; border-color: #8b949e; }
+</style>
+
+<script is:inline>
+  document.getElementById('topbar-file-input').addEventListener('change', function () {
+    const file = this.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        window.__evoseerLoadFile(file.name, data);
+      } catch {
+        alert('Failed to parse file — expected a valid .evoseer.json');
+      }
+    };
+    reader.readAsText(file);
+    this.value = '';
+  });
+</script>

@@ -1,0 +1,259 @@
+---
+import ChartWidget from './ChartWidget.astro';
+---
+
+<div class="ois-widget">
+
+  <!-- ── Chart 1 : susceptibilité génotypique S_i ── -->
+  <div class="ois-section">
+    <p class="ois-title">Susceptibilité génotypique S<sub>i</sub> = σ(A)</p>
+    <ChartWidget width={400} height={230}>
+
+      <div class="cw-row">
+        <div class="cw-group">
+          <div class="cw-label">
+            <span class="cw-name">slope</span>
+            <span class="cw-disp" data-ois="slope-disp">4.0</span>
+          </div>
+          <input class="cw-range" data-ois="slope" type="range" min="0.5" max="10" step="0.1" value="4">
+        </div>
+      </div>
+
+      <div class="cw-group">
+        <div class="cw-label">
+          <span class="cw-dot" style="color:#2E7D32">●</span>
+          <span class="cw-name">Σ OIS<sub>act</sub> GOF (BRAF, NRAS, KRAS)</span>
+          <span class="cw-disp" data-ois="act-disp">0.50</span>
+        </div>
+        <input class="cw-range" data-ois="act" type="range" min="0" max="0.75" step="0.01" value="0.5"
+               style="accent-color:#2E7D32">
+      </div>
+
+      <div class="cw-group">
+        <div class="cw-label">
+          <span class="cw-dot" style="color:#C62828">●</span>
+          <span class="cw-name">Σ OIS<sub>inh</sub> LOF (CDKN2A, TP53)</span>
+          <span class="cw-disp" data-ois="inh-disp">0.00</span>
+        </div>
+        <input class="cw-range" data-ois="inh" type="range" min="0" max="3.0" step="0.01" value="0"
+               style="accent-color:#C62828">
+      </div>
+
+      <div class="cw-result">
+        <span class="cw-result-item">
+          <span class="cw-result-label">A</span>
+          <strong data-ois="A-disp">0.500</strong>
+        </span>
+        <span class="cw-arrow">→</span>
+        <span class="cw-result-item">
+          <span class="cw-result-label">S<sub>i</sub></span>
+          <strong data-ois="Si-disp">0.880</strong>
+        </span>
+      </div>
+
+    </ChartWidget>
+  </div>
+
+  <!-- ── Chart 2 : taux de sénescence λ_i^OIS ── -->
+  <div class="ois-section">
+    <p class="ois-title">Taux de sénescence λ<sub>i</sub><sup>OIS</sup> = S<sub>i</sub> · λ<sub>0</sub> · Hill(k, K, n)</p>
+    <ChartWidget width={400} height={230}>
+
+      <div class="cw-row">
+        <div class="cw-group">
+          <div class="cw-label">
+            <span class="cw-name">λ<sub>0</sub></span>
+            <span class="cw-disp" data-ois="l0-disp">0.010</span>
+          </div>
+          <input class="cw-range" data-ois="l0" type="range" min="0.001" max="0.05" step="0.001" value="0.01">
+        </div>
+        <div class="cw-group">
+          <div class="cw-label">
+            <span class="cw-name">K (divisions)</span>
+            <span class="cw-disp" data-ois="K-disp">15</span>
+          </div>
+          <input class="cw-range" data-ois="K" type="range" min="5" max="50" step="1" value="15">
+        </div>
+      </div>
+
+      <div class="cw-row">
+        <div class="cw-group">
+          <div class="cw-label">
+            <span class="cw-name">n (Hill)</span>
+            <span class="cw-disp" data-ois="n-disp">2.0</span>
+          </div>
+          <input class="cw-range" data-ois="n" type="range" min="1" max="5" step="0.1" value="2">
+        </div>
+        <div class="cw-group">
+          <div class="cw-label">
+            <span class="cw-name">k (divisions)</span>
+            <span class="cw-disp" data-ois="k-disp">20</span>
+          </div>
+          <input class="cw-range" data-ois="k" type="range" min="0" max="60" step="1" value="20">
+        </div>
+      </div>
+
+      <div class="cw-result">
+        <span class="cw-result-item">
+          <span class="cw-result-label">Hill</span>
+          <strong data-ois="hill-disp">0.640</strong>
+        </span>
+        <span class="cw-arrow">→</span>
+        <span class="cw-result-item">
+          <span class="cw-result-label">λ<sub>i</sub><sup>OIS</sup></span>
+          <strong data-ois="lambda-disp">5.63e-3</strong>
+        </span>
+      </div>
+
+    </ChartWidget>
+  </div>
+
+</div>
+
+<style>
+  .ois-widget {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .ois-title {
+    margin: 0 0 0.35rem 0;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--sl-color-text-accent, #444);
+  }
+  /* Remove top margin on second ChartWidget so sections sit together */
+  .ois-section + .ois-section :global(.cw-wrap) {
+    margin-top: 0;
+  }
+</style>
+
+<script>
+import { CanvasChart } from '../utils/canvas-chart.ts';
+
+const C_CURVE  = '#4C9BE8';
+const C_ACT    = '#2E7D32';
+const C_INH    = '#C62828';
+const C_POINT  = '#E53935';
+const C_THRESH = '#9C27B0';
+
+const X_GRID1 = [-3, -2, -1, 0, 1];
+const Y_GRID  = [0, 0.25, 0.5, 0.75, 1];
+const X_GRID2 = [0, 10, 20, 30, 40, 50, 60];
+
+function hill(k: number, K: number, n: number): number {
+  const Kn = Math.pow(K, n);
+  return Math.pow(k, n) / (Kn + Math.pow(k, n));
+}
+
+function initOISWidget(root: HTMLElement): void {
+  const sections = root.querySelectorAll<HTMLElement>('.ois-section');
+  const canvas1  = sections[0].querySelector<HTMLCanvasElement>('.cw-canvas')!;
+  const canvas2  = sections[1].querySelector<HTMLCanvasElement>('.cw-canvas')!;
+
+  const chart1 = new CanvasChart(canvas1, {
+    xMin: -3.2, xMax: 1.3, yMin: 0, yMax: 1,
+    xLabel: 'A', yLabel: 'Sᵢ',
+  });
+  const chart2 = new CanvasChart(canvas2, {
+    xMin: 0, xMax: 62, yMin: 0, yMax: 1,
+    xLabel: 'k (divisions)', yLabel: 'Hill',
+  });
+
+  const g = (key: string) => root.querySelector<HTMLElement>(`[data-ois="${key}"]`)!;
+
+  const slopeIn = g('slope') as HTMLInputElement;
+  const actIn   = g('act')   as HTMLInputElement;
+  const inhIn   = g('inh')   as HTMLInputElement;
+  const l0In    = g('l0')    as HTMLInputElement;
+  const KIn     = g('K')     as HTMLInputElement;
+  const nIn     = g('n')     as HTMLInputElement;
+  const kIn     = g('k')     as HTMLInputElement;
+
+  let currentSi = 0.88;
+
+  function drawSi(): void {
+    const slope = parseFloat(slopeIn.value);
+    const act   = parseFloat(actIn.value);
+    const inh   = parseFloat(inhIn.value);
+    const A     = act - inh;
+    const Si    = 1 / (1 + Math.exp(-slope * A));
+
+    currentSi = Si;
+
+    g('slope-disp').textContent = slope.toFixed(1);
+    g('act-disp').textContent   = act.toFixed(2);
+    g('inh-disp').textContent   = inh.toFixed(2);
+    g('A-disp').textContent     = A.toFixed(3);
+    g('Si-disp').textContent    = Si.toFixed(3);
+
+    chart1.clear();
+    chart1.drawBackground(X_GRID1, Y_GRID, {
+      x: [-3, -2, -1, 0, 1],
+      y: [0, 0.5, 1],
+    });
+
+    // threshold at 0 (purple dashed)
+    chart1.vLine(0, C_THRESH, 0.45);
+
+    // sigmoid curve
+    chart1.plotCurve(x => 1 / (1 + Math.exp(-slope * x)), C_CURVE);
+
+    // GOF bar: 0 → act (green, positive contribution)
+    if (act > 0) chart1.barSegment(0, act, C_ACT);
+    // inh bar: A → 0 (red, only visible when A < 0, i.e. inh dominates)
+    if (A < 0)   chart1.barSegment(A, 0, C_INH);
+
+    chart1.crosshair(A, Si, C_POINT);
+    chart1.dot(A, Si, C_POINT);
+
+    drawLambda();
+  }
+
+  function drawLambda(): void {
+    const l0 = parseFloat(l0In.value);
+    const K  = parseFloat(KIn.value);
+    const n  = parseFloat(nIn.value);
+    const k  = parseFloat(kIn.value);
+
+    const h      = hill(k, K, n);
+    const lambda = currentSi * l0 * h;
+
+    g('l0-disp').textContent     = l0.toFixed(3);
+    g('K-disp').textContent      = String(Math.round(K));
+    g('n-disp').textContent      = n.toFixed(1);
+    g('k-disp').textContent      = String(Math.round(k));
+    g('hill-disp').textContent   = h.toFixed(3);
+    g('lambda-disp').textContent = lambda.toExponential(2);
+
+    chart2.clear();
+    chart2.drawBackground(X_GRID2, Y_GRID, {
+      x: [0, 15, 30, 45, 60],
+      y: [0, 0.5, 1],
+    });
+
+    // half-saturation marker at K
+    chart2.vLine(K, C_THRESH, 0.5);
+
+    // Hill curve
+    chart2.plotCurve(kv => hill(kv, K, n), C_CURVE);
+
+    // current k position
+    chart2.crosshair(k, h, C_POINT);
+    chart2.dot(k, h, C_POINT);
+  }
+
+  [slopeIn, actIn, inhIn].forEach(s => s.addEventListener('input', drawSi));
+  [l0In, KIn, nIn, kIn].forEach(s => s.addEventListener('input', drawLambda));
+
+  chart1.watchTheme(drawSi);
+  chart2.watchTheme(() => { drawSi(); });
+
+  drawSi();
+}
+
+document.querySelectorAll<HTMLElement>('.ois-widget:not([data-init])').forEach(root => {
+  root.dataset.init = '1';
+  initOISWidget(root);
+});
+</script>

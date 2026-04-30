@@ -1,0 +1,88 @@
+---
+---
+
+<div class="clones-wrap">
+  <canvas id="clones-canvas"></canvas>
+</div>
+
+<style>
+  .clones-wrap {
+    position: relative;
+    height: 460px;
+  }
+  #clones-canvas { display: block; width: 100% !important; height: 100% !important; }
+</style>
+
+<script>
+import Chart from 'chart.js/auto';
+import { buildCloneColorMap } from '../../utils/clone-colors';
+
+let chart: any = null;
+
+function render(data: any) {
+  const canvas = document.getElementById('clones-canvas') as HTMLCanvasElement | null;
+  if (!canvas || !data) return;
+
+  const allNodes = data.clone_tree.nodes;
+  const colorMap = buildCloneColorMap(allNodes);
+
+  const sorted = [...allNodes]
+    .filter((n: any) => n.final_size > 0)
+    .sort((a: any, b: any) => b.final_size - a.final_size)
+    .slice(0, 20);
+
+  const total = sorted.reduce((s: number, n: any) => s + n.final_size, 0);
+
+  const labels = sorted.map((n: any) => n.label || n.id);
+  const values = sorted.map((n: any) => total > 0 ? +(n.final_size / total * 100).toFixed(2) : 0);
+  const colors = sorted.map((n: any) => colorMap.get(n.id) ?? '#6e7681');
+
+  if (chart) { chart.destroy(); chart = null; }
+  chart = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: colors.map((c: string) => c + 'cc'),
+        borderColor: colors,
+        borderWidth: 1,
+        borderRadius: 3,
+      }],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: {
+          ticks: { color: '#8b949e', callback: (v: any) => v + '%' },
+          grid: { color: '#21262d' },
+          title: { display: true, text: 'Proportion (%)', color: '#8b949e' },
+        },
+        y: {
+          ticks: { color: '#8b949e', font: { size: 11 } },
+          grid: { color: '#21262d' },
+        },
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx: any) => {
+              const node = sorted[ctx.dataIndex];
+              const lines = [`${ctx.parsed.x.toFixed(2)}%`, `Size: ${node.final_size.toLocaleString()} cells`];
+              if (node.gene) lines.push(`Gene: ${node.gene}`);
+              if (node.effect) lines.push(`Effect: ${node.effect}`);
+              return lines;
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+(window as any).__evoseerRenderClones = render;
+</script>

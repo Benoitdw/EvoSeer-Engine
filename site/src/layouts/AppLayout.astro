@@ -1,0 +1,119 @@
+---
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const { title = 'EvoSeer' } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{title}</title>
+  <slot name="head" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href={`${base}/`}>
+      <span class="brand-name">EvoSeer</span>
+      <span class="brand-tag">visualizer</span>
+    </a>
+    <div class="topbar-center">
+      <slot name="topbar" />
+    </div>
+    <nav class="topbar-nav">
+      <a href={`${base}/introduction/`}>Docs</a>
+      <a href="https://github.com/bdewitte/EvoSeerEngine" target="_blank" rel="noopener">
+        GitHub
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </a>
+    </nav>
+  </header>
+
+  <main class="app-main">
+    <slot />
+  </main>
+</body>
+</html>
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  [hidden] { display: none !important; }
+
+  html, body {
+    height: 100%;
+    background: #0d1117;
+    color: #e6edf3;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+  }
+
+  .topbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 48px;
+    background: #0d1117;
+    border-bottom: 1px solid #21262d;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.5rem;
+    z-index: 100;
+  }
+
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    text-decoration: none;
+  }
+
+  .brand-name {
+    font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #e6edf3;
+    letter-spacing: -0.01em;
+  }
+
+  .brand-tag {
+    font-family: ui-monospace, monospace;
+    font-size: 0.7rem;
+    color: #3fb950;
+    background: #0f2d1a;
+    border: 1px solid #1a4228;
+    border-radius: 0.25rem;
+    padding: 0.1rem 0.4rem;
+    letter-spacing: 0.02em;
+  }
+
+  .topbar-center {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .topbar-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
+  .topbar-nav a {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.85rem;
+    color: #8b949e;
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+
+  .topbar-nav a:hover { color: #e6edf3; }
+
+  .app-main {
+    padding-top: 48px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+</style>

@@ -113,12 +113,17 @@ class SimulationExporter:
                 | {ev.cell_id for ev in result.deaths}
             )
 
-        # Mutable lineage state
-        cell_drivers: dict[int, set[int]] = {fid: set() for fid in founder_ids}
-        alive_cells:  set[int]            = set(founder_ids)
-        driver_acq_order:   list[int]       = []  # chronological
-        driver_acq_step:    dict[int, int]  = {}
-        driver_parent_clone: dict[int, str] = {}
+        # Mutable lineage state.
+        # cell_clone_events maps cell_id -> set of clone event IDs the cell carries.
+        # A clone event ID is unique per acquisition event (f"{mutation_id}_{counter}"),
+        # so two independent acquisitions of the same mutation_id create distinct clones.
+        cell_clone_events: dict[int, set[str]] = {fid: set() for fid in founder_ids}
+        alive_cells:  set[int]                  = set(founder_ids)
+        driver_acq_order:    list[str]           = []  # clone event IDs, chronological
+        driver_acq_step:     dict[str, int]      = {}  # clone_id -> step
+        driver_parent_clone: dict[str, str]      = {}  # clone_id -> parent clone_id
+        clone_mutation:      dict[str, int]      = {}  # clone_id -> mutation_id
+        _acq_counter:        dict[int, int]      = {}  # mutation_id -> # times acquired
 
         # Snapshot-step-ordered collection points
         snap_by_step = {s.step: s for s in result.snapshots}
@@ -131,31 +136,35 @@ class SimulationExporter:
             nonlocal cur_step
             while cur_step <= target:
                 for parent_id, child_id in div_by_step.get(cur_step, []):
-                    cell_drivers[child_id] = set(cell_drivers.get(parent_id, ()))
+                    cell_clone_events[child_id] = set(cell_clone_events.get(parent_id, ()))
                     alive_cells.add(child_id)
                 for cid in death_by_step.get(cur_step, []):
                     alive_cells.discard(cid)
                 for cid, mid in driver_by_step.get(cur_step, []):
-                    if cid not in cell_drivers:
-                        cell_drivers[cid] = set()
-                    if mid not in driver_acq_step:
-                        driver_acq_step[mid] = cur_step
-                        # Parent clone = first already-acquired driver on this cell
-                        parent = "wt"
-                        for prev_mid in driver_acq_order:
-                            if prev_mid in cell_drivers[cid]:
-                                parent = str(prev_mid)
-                                break
-                        driver_parent_clone[mid] = parent
-                        driver_acq_order.append(mid)
-                    cell_drivers[cid].add(mid)
+                    if cid not in cell_clone_events:
+                        cell_clone_events[cid] = set()
+                    # Each acquisition event creates a new clone regardless of mutation_id
+                    idx = _acq_counter.get(mid, 0)
+                    _acq_counter[mid] = idx + 1
+                    clone_id = f"{mid}_{idx}"
+                    # Parent clone = earliest clone this cell already carries
+                    parent = "wt"
+                    for prev_id in driver_acq_order:
+                        if prev_id in cell_clone_events[cid]:
+                            parent = prev_id
+                            break
+                    driver_parent_clone[clone_id] = parent
+                    driver_acq_step[clone_id] = cur_step
+                    driver_acq_order.append(clone_id)
+                    clone_mutation[clone_id] = mid
+                    cell_clone_events[cid].add(clone_id)
                 cur_step += 1
 
         for snap_step in snapshot_steps:
             _advance_to(snap_step)
             snap = snap_by_step[snap_step]
             row: dict[str, Any] = {"step": snap_step, "t": snap.t}
-            row.update(_count_clones(alive_cells, cell_drivers, driver_acq_order))
+            row.update(_count_clones(alive_cells, cell_clone_events, driver_acq_order))
             clonal_fractions.append(row)
 
         # Advance past all driver events so tree metadata is complete
@@ -163,13 +172,14 @@ class SimulationExporter:
         if all_driver_steps:
             _advance_to(max(all_driver_steps))
 
-        final_counts = _count_clones(alive_cells, cell_drivers, driver_acq_order)
+        final_counts = _count_clones(alive_cells, cell_clone_events, driver_acq_order)
 
         self._lineage_cache = _LineageState(
             clonal_fractions=clonal_fractions,
             driver_acq_order=driver_acq_order,
             driver_acq_step=driver_acq_step,
             driver_parent_clone=driver_parent_clone,
+            clone_mutation=clone_mutation,
             final_counts=final_counts,
             interp_t=interp_t,
         )
@@ -189,7 +199,8 @@ class SimulationExporter:
         ]
         edges: list[dict] = []
 
-        for mid in state.driver_acq_order:
+        for clone_id in state.driver_acq_order:
+            mid = state.clone_mutation[clone_id]
             try:
                 rec = self.store.get(mid)
                 gene   = rec.gene_name
@@ -200,19 +211,20 @@ class SimulationExporter:
                 effect = None
                 label  = f"Driver {mid}"
 
-            acq_step = state.driver_acq_step[mid]
+            acq_step = state.driver_acq_step[clone_id]
             nodes.append(
                 {
-                    "id": str(mid),
+                    "id": clone_id,
                     "label": label,
+                    "mutation_id": mid,
                     "gene": gene,
                     "effect": effect,
                     "acq_step": acq_step,
                     "acq_t": state.interp_t(acq_step),
-                    "final_size": state.final_counts.get(str(mid), 0),
+                    "final_size": state.final_counts.get(clone_id, 0),
                 }
             )
-            edges.append({"parent": state.driver_parent_clone[mid], "child": str(mid)})
+            edges.append({"parent": state.driver_parent_clone[clone_id], "child": clone_id})
 
         return {"nodes": nodes, "edges": edges}
 
@@ -233,17 +245,24 @@ def _build_snapshots(result: SimulationResult) -> list[dict]:
 
 def _count_clones(
     alive_cells: set[int],
-    cell_drivers: dict[int, set[int]],
-    acq_order: list[int],
+    cell_clone_events: dict[int, set[str]],
+    acq_order: list[str],
 ) -> dict[str, int]:
-    """Count alive cells per clone. Clone = first acquired driver carried; 'wt' if none."""
+    """Count alive cells per clone.
+
+    Clone identity is determined by the *earliest-acquired clone event* the cell carries,
+    not by mutation_id alone — two independent acquisitions of the same mutation produce
+    distinct clone event IDs and are counted separately.
+    """
     counts: dict[str, int] = {"wt": 0}
     for cid in alive_cells:
-        drivers = cell_drivers.get(cid, ())
+        carried = cell_clone_events.get(cid, ())
         key = "wt"
-        for mid in acq_order:
-            if mid in drivers:
-                key = str(mid)
+        # Iterate most-recently-acquired first so a cell carrying both a parent
+        # clone and a subclone is assigned to the most derived clone.
+        for clone_id in reversed(acq_order):
+            if clone_id in carried:
+                key = clone_id
                 break
         counts[key] = counts.get(key, 0) + 1
     return counts
@@ -289,6 +308,7 @@ class _LineageState:
         "driver_acq_order",
         "driver_acq_step",
         "driver_parent_clone",
+        "clone_mutation",
         "final_counts",
         "interp_t",
     )
@@ -296,15 +316,17 @@ class _LineageState:
     def __init__(
         self,
         clonal_fractions: list[dict],
-        driver_acq_order: list[int],
-        driver_acq_step: dict[int, int],
-        driver_parent_clone: dict[int, str],
+        driver_acq_order: list[str],
+        driver_acq_step: dict[str, int],
+        driver_parent_clone: dict[str, str],
+        clone_mutation: dict[str, int],
         final_counts: dict[str, int],
         interp_t: Callable[[int], float],
     ) -> None:
-        self.clonal_fractions   = clonal_fractions
-        self.driver_acq_order   = driver_acq_order
-        self.driver_acq_step    = driver_acq_step
+        self.clonal_fractions    = clonal_fractions
+        self.driver_acq_order    = driver_acq_order
+        self.driver_acq_step     = driver_acq_step
         self.driver_parent_clone = driver_parent_clone
-        self.final_counts       = final_counts
-        self.interp_t           = interp_t
+        self.clone_mutation      = clone_mutation
+        self.final_counts        = final_counts
+        self.interp_t            = interp_t

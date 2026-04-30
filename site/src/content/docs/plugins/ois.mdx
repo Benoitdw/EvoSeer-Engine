@@ -4,6 +4,7 @@ description: OISPlugin — how Oncogene-Induced Senescence is modelled as a stoc
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import OISWidget from '../../../components/OISWidget.astro';
 
 Oncogene-Induced Senescence (OIS) is the primary barrier between a benign nevus and melanoma. When a melanocyte acquires a strong oncogenic mutation (e.g. BRAF V600E), the cell's own sensing machinery can detect the anomalous proliferative signal and permanently arrest the cell cycle. EvoSeer models OIS as two decoupled components: a **genotypic susceptibility score S_i** and a **stochastic firing hazard λ_i^OIS**.
 
@@ -51,6 +52,7 @@ $$
 
 The key difference from the ERK pathway: $\mathrm{OIS_{inh}}$ genes are **suppressors** — their LOF removes OIS machinery and pushes $S_i$ toward 0. This is encoded in the YAML as a separate `suppressors` block (see below).
 
+<OISWidget />
 ### Intuition
 
 | Cell genotype | A | S_i | Interpretation |

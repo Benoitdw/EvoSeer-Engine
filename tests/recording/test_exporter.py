@@ -142,15 +142,15 @@ def test_clonal_fractions_with_driver():
 
     # step 0: only founder alive
     assert fracs[0]["wt"] == 1
-    assert "10" not in fracs[0]
+    assert "10_0" not in fracs[0]
 
     # step 2: both cells alive, no driver yet
     assert fracs[1]["wt"] == 2
-    assert fracs[1].get("10", 0) == 0
+    assert fracs[1].get("10_0", 0) == 0
 
-    # step 5: cell 1 now in clone "10", cell 0 still wt
+    # step 5: cell 1 now in clone "10_0" (first acquisition of mut 10), cell 0 still wt
     assert fracs[2]["wt"] == 1
-    assert fracs[2]["10"] == 1
+    assert fracs[2]["10_0"] == 1
 
 
 # ── Clone tree ────────────────────────────────────────────────────────────────
@@ -171,21 +171,22 @@ def test_clone_tree_single_driver():
 
     node_ids = {n["id"] for n in tree["nodes"]}
     assert "wt" in node_ids
-    assert "10" in node_ids
+    assert "10_0" in node_ids
 
     # wt node has correct fields
     wt_node = next(n for n in tree["nodes"] if n["id"] == "wt")
     assert wt_node["acq_step"] == 0
     assert wt_node["acq_t"] == 0.0
 
-    # driver node acquired at step 3
-    driver_node = next(n for n in tree["nodes"] if n["id"] == "10")
+    # driver node acquired at step 3; clone ID encodes acquisition index
+    driver_node = next(n for n in tree["nodes"] if n["id"] == "10_0")
     assert driver_node["acq_step"] == 3
     assert driver_node["gene"] == "BRAF"
     assert driver_node["effect"] == "GOF"
+    assert driver_node["mutation_id"] == 10
 
-    # edge: wt → 10
-    assert tree["edges"] == [{"parent": "wt", "child": "10"}]
+    # edge: wt → 10_0
+    assert tree["edges"] == [{"parent": "wt", "child": "10_0"}]
 
 
 def test_clone_tree_nested_drivers():
@@ -212,9 +213,9 @@ def test_clone_tree_nested_drivers():
     tree = SimulationExporter(result, store).export()["clone_tree"]
 
     edges = {(e["parent"], e["child"]) for e in tree["edges"]}
-    assert ("wt", "10") in edges
-    # cell 2 inherited mut 10 from cell 1 before acquiring mut 20 → parent clone is "10"
-    assert ("10", "20") in edges
+    assert ("wt", "10_0") in edges
+    # cell 2 inherited clone 10_0 from cell 1 before acquiring mut 20 → parent clone is "10_0"
+    assert ("10_0", "20_0") in edges
 
 
 def test_clone_tree_independent_drivers():
@@ -240,8 +241,8 @@ def test_clone_tree_independent_drivers():
     )
     tree = SimulationExporter(result, store).export()["clone_tree"]
     edges = {(e["parent"], e["child"]) for e in tree["edges"]}
-    assert ("wt", "10") in edges
-    assert ("wt", "20") in edges
+    assert ("wt", "10_0") in edges
+    assert ("wt", "20_0") in edges
 
 
 # ── Final sizes ──────────────────────────────────────────────────────────────
@@ -264,10 +265,48 @@ def test_final_sizes():
     tree = SimulationExporter(result, store).export()["clone_tree"]
 
     wt_node     = next(n for n in tree["nodes"] if n["id"] == "wt")
-    driver_node = next(n for n in tree["nodes"] if n["id"] == "10")
-    # cells 0 and 2 in wt; cell 1 in clone 10
+    driver_node = next(n for n in tree["nodes"] if n["id"] == "10_0")
+    # cells 0 and 2 in wt; cell 1 in clone 10_0
     assert wt_node["final_size"] == 2
     assert driver_node["final_size"] == 1
+
+
+def test_independent_acquisitions_same_mutation_create_distinct_clones():
+    """Two lineages independently acquiring the same mutation_id are separate clones."""
+    result = SimulationResult()
+    result.stop_reason = "max_cells"
+    # Two founders (0, 1); each divides → children (2, 3); each child acquires mut 10
+    result.divisions = [
+        DivisionEvent(step=1, parent_id=0, child_id=2),
+        DivisionEvent(step=1, parent_id=1, child_id=3),
+    ]
+    result.drivers = [
+        DriverEvent(step=3, cell_id=2, mutation_id=10),
+        DriverEvent(step=3, cell_id=3, mutation_id=10),  # same mutation, different lineage
+    ]
+    result.snapshots = [
+        Snapshot(step=0, t=0.0, n_alive=2, n_dead_cumulative=0),
+        Snapshot(step=5, t=0.5, n_alive=4, n_dead_cumulative=0),
+    ]
+    store = _store_with(MutationRecord(10, gene_name="BRAF", effect="GOF", is_driver=True))
+    exported = SimulationExporter(result, store).export()
+
+    tree = exported["clone_tree"]
+    node_ids = {n["id"] for n in tree["nodes"]}
+    # Two distinct clone events even though mutation_id is the same
+    assert "10_0" in node_ids
+    assert "10_1" in node_ids
+
+    edges = {(e["parent"], e["child"]) for e in tree["edges"]}
+    assert ("wt", "10_0") in edges
+    assert ("wt", "10_1") in edges
+
+    fracs = exported["clonal_fractions"]
+    final = fracs[-1]
+    # Founders 0 and 1 remain in wt; children 2 and 3 are in distinct BRAF clones
+    assert final["wt"] == 2
+    assert final.get("10_0", 0) == 1
+    assert final.get("10_1", 0) == 1
 
 
 # ── JSON serialisability ─────────────────────────────────────────────────────

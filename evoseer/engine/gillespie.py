@@ -302,9 +302,9 @@ class GillespieEngine:
                         if ps is not None:
                             ps.mark_dirty()
 
-        # i. Record driver acquisitions
+        # i. Record driver acquisitions — only truly new ones (not inherited from parent)
         for mut_id in new_mutations:
-            if self._store.is_driver(mut_id):
+            if self._store.is_driver(mut_id) and mut_id not in parent.state.mutations:
                 self._recorder.record_driver(step, child_id, mut_id)
 
         # j. Record division

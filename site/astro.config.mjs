@@ -65,6 +65,12 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Calibration',
+          items: [
+            { label: 'ABC Calibration', slug: 'calibration/overview' },
+          ],
+        },
+        {
           label: 'Tools',
           items: [
             { label: 'Visualizer', slug: 'visualizer' },

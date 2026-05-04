@@ -1,0 +1,15 @@
+base_config: evoseer/config/default.yaml
+
+n_samples: 100
+n_sims: 10
+epsilon: 0.1
+distance: ks
+base_seed: 42
+
+target:
+  data_dir: /path/to/ISIC_2024
+
+priors:
+  mutation_rate:
+    weight: [uniform, 0.0, 2.0]
+    alpha:  [uniform, -1.0, 1.0]

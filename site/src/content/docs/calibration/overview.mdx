@@ -1,0 +1,108 @@
+---
+title: ABC Calibration
+description: Approximate Bayesian Computation calibration of plugin parameters
+---
+
+import { Code } from '@astrojs/starlight/components';
+
+EvoSeer uses **Approximate Bayesian Computation (ABC)** to infer the `weight` (w) and `alpha` (α)
+of each plugin by comparing the clone-size distribution produced by the simulator to an observed
+distribution — here derived from ISIC 2024 benign lesion area data (`tbp_lv_areaMM2`).
+
+The engine itself is never modified. The calibration layer sits entirely above it.
+
+## How it works
+
+<div class="mermaid">
+flowchart TD
+    P["<b>Parameters</b><br/>• weight w (per plugin)<br/>• alpha α (per plugin)"]
+    E["<b>EvoSeer-Engine</b><br/>× n_sims runs"]
+    ABC["<b>ABC Calibration</b><br/>pool clone sizes<br/>compute distance to target"]
+    D{"distance &lt; ε ?"}
+    CP["Sample new params<br/>from prior"]
+    OUT["✓ Accepted<br/>posterior sample"]
+
+    P --> E
+    E --> ABC
+    ABC --> D
+    D -- No --> CP
+    CP --> P
+    D -- Yes --> OUT
+</div>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad: true, theme: 'neutral' });
+</script>
+
+## Method — Rejection ABC
+
+For each iteration:
+
+1. **Sample** a parameter set `{plugin → (w, α)}` from the prior distribution
+2. **Generate** a temporary `config.yaml` with those parameters applied
+3. **Run** `n_sims` independent simulations (each with a different seed)
+4. **Pool** all non-founding clone sizes across runs into one flat distribution
+5. **Compute** distance between the pooled distribution and the target
+6. **Accept** if `distance < ε`, discard otherwise
+
+The accepted samples approximate the ABC posterior over `(w, α)`.
+
+## Loss functions
+
+The distance metric is pluggable — set `distance:` in `calibration.yaml`:
+
+| Key | Description |
+|-----|-------------|
+| `ks` | Kolmogorov-Smirnov statistic (default) |
+| `wasserstein` | Earth mover's distance |
+| `l1` | Mean absolute difference on sorted vectors |
+| `l2` | RMSE on sorted vectors |
+
+Override `load_target()` in `calibration/target.py` to change the observed distribution.
+
+## Configuration
+
+```yaml
+# calibration.yaml
+base_config: evoseer/config/default.yaml
+
+n_samples: 500        # total ABC iterations
+n_sims: 50            # simulations pooled per parameter set
+epsilon: 0.1          # acceptance threshold
+distance: ks
+base_seed: 42
+
+target:
+  data_dir: /path/to/ISIC_2024
+
+priors:
+  mapk:
+    weight: [uniform, 0.0, 2.0]
+    alpha:  [uniform, -1.0, 1.0]
+  ois:
+    weight: [uniform, -2.0, 0.0]
+    alpha:  [uniform, -1.0, 1.0]
+```
+
+## Running calibration
+
+```bash
+python calibrate.py --config calibration/config/default_calibration.yaml
+```
+
+Results are written to `calibration_results.json` and contain every accepted
+`(params, distance)` pair, all distances for diagnostics, and the acceptance rate.
+
+## Module structure
+
+```
+calibration/
+├── abc.py          # RejectionABC orchestrator + CalibrationResult
+├── sampler.py      # Prior sampler
+├── summary.py      # Clone size extraction
+├── distance.py     # Pluggable loss functions
+├── config_gen.py   # Temp config.yaml generation
+├── runner.py       # Batch simulation runner
+└── target.py       # ISIC 2024 target loader
+```

@@ -3,7 +3,7 @@ title: ABC Calibration
 description: Approximate Bayesian Computation calibration of plugin parameters
 ---
 
-import { Code } from '@astrojs/starlight/components';
+import MermaidChart from '../../../components/MermaidChart.astro';
 
 EvoSeer uses **Approximate Bayesian Computation (ABC)** to infer the `weight` (w) and `alpha` (α)
 of each plugin by comparing the clone-size distribution produced by the simulator to an observed
@@ -13,14 +13,14 @@ The engine itself is never modified. The calibration layer sits entirely above i
 
 ## How it works
 
-<div class="mermaid">
+<MermaidChart diagram={`
 flowchart TD
-    P["<b>Parameters</b><br/>• weight w (per plugin)<br/>• alpha α (per plugin)"]
-    E["<b>EvoSeer-Engine</b><br/>× n_sims runs"]
-    ABC["<b>ABC Calibration</b><br/>pool clone sizes<br/>compute distance to target"]
-    D{"distance &lt; ε ?"}
-    CP["Sample new params<br/>from prior"]
-    OUT["✓ Accepted<br/>posterior sample"]
+    P["Parameters\\n• weight w per plugin\\n• alpha α per plugin"]
+    E["EvoSeer-Engine\\n× n_sims runs"]
+    ABC["ABC Calibration\\npool clone sizes\\ncompute distance to target"]
+    D{"distance < ε ?"}
+    CP["Sample new params\\nfrom prior"]
+    OUT["Accepted\\nposterior sample"]
 
     P --> E
     E --> ABC
@@ -28,12 +28,7 @@ flowchart TD
     D -- No --> CP
     CP --> P
     D -- Yes --> OUT
-</div>
-
-<script type="module">
-  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-  mermaid.initialize({ startOnLoad: true, theme: 'neutral' });
-</script>
+`} />
 
 ## Method — Rejection ABC
 

@@ -1,15 +1,18 @@
-base_config: evoseer/config/default.yaml
+base_config: evoseer/config/erk_ois.yaml
 
-n_samples: 100
+n_samples: 50
 n_sims: 10
 epsilon: 0.1
 distance: ks
 base_seed: 42
 
 target:
-  data_dir: /path/to/ISIC_2024
+  data_dir: /home/ben/projects/EvoSeerEngine/ISIC_2024
 
 priors:
-  mutation_rate:
-    weight: [uniform, 0.0, 2.0]
+  erk_pathway:
+    weight: [uniform, 0.0, 3.0]
     alpha:  [uniform, -1.0, 1.0]
+  base_death:
+    weight: [uniform, 0.0, 3.0]
+    alpha:  [uniform,  0.0, 2.0]

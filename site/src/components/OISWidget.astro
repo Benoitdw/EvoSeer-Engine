@@ -59,13 +59,21 @@ import ChartWidget from './ChartWidget.astro';
     <p class="ois-title">Taux de sénescence λ<sub>i</sub><sup>OIS</sup> = S<sub>i</sub> · λ<sub>0</sub> · Hill(k, K, n)</p>
     <ChartWidget width={400} height={230}>
 
+      <div class="cw-group">
+        <div class="cw-label">
+          <span class="cw-dot" style="color:#E53935">●</span>
+          <span class="cw-name">S<sub>i</sub> (lié au graphe 1)</span>
+          <span class="cw-disp" data-ois="Si-ref">0.880</span>
+        </div>
+      </div>
+
       <div class="cw-row">
         <div class="cw-group">
           <div class="cw-label">
-            <span class="cw-name">λ<sub>0</sub></span>
+            <span class="cw-name">λ<sub>0</sub></span>1" s
             <span class="cw-disp" data-ois="l0-disp">0.010</span>
           </div>
-          <input class="cw-range" data-ois="l0" type="range" min="0.001" max="0.05" step="0.001" value="0.01">
+          <input class="cw-range" data-ois="l0" type="range" min="0.1" max="1" step="0.1" value="0.1">
         </div>
         <div class="cw-group">
           <div class="cw-label">
@@ -95,7 +103,12 @@ import ChartWidget from './ChartWidget.astro';
 
       <div class="cw-result">
         <span class="cw-result-item">
-          <span class="cw-result-label">Hill</span>
+          <span class="cw-result-label">S<sub>i</sub></span>
+          <strong data-ois="Si-disp2">0.880</strong>
+        </span>
+        <span class="cw-arrow">×</span>
+        <span class="cw-result-item">
+          <span class="cw-result-label">Hill(k)</span>
           <strong data-ois="hill-disp">0.640</strong>
         </span>
         <span class="cw-arrow">→</span>
@@ -156,8 +169,8 @@ function initOISWidget(root: HTMLElement): void {
     xLabel: 'A', yLabel: 'Sᵢ',
   });
   const chart2 = new CanvasChart(canvas2, {
-    xMin: 0, xMax: 62, yMin: 0, yMax: 1,
-    xLabel: 'k (divisions)', yLabel: 'Hill',
+    xMin: 0, xMax: 62, yMin: 0, yMax: 0.012,
+    xLabel: 'k (divisions)', yLabel: 'λᵢᴼᴵˢ',
   });
 
   const g = (key: string) => root.querySelector<HTMLElement>(`[data-ois="${key}"]`)!;
@@ -186,6 +199,8 @@ function initOISWidget(root: HTMLElement): void {
     g('inh-disp').textContent   = inh.toFixed(2);
     g('A-disp').textContent     = A.toFixed(3);
     g('Si-disp').textContent    = Si.toFixed(3);
+    g('Si-ref').textContent     = Si.toFixed(3);
+    g('Si-disp2').textContent   = Si.toFixed(3);
 
     chart1.clear();
     chart1.drawBackground(X_GRID1, Y_GRID, {
@@ -219,6 +234,11 @@ function initOISWidget(root: HTMLElement): void {
     const h      = hill(k, K, n);
     const lambda = currentSi * l0 * h;
 
+    // y-axis scale: fixed to l0 so it doesn't jump as S_i changes,
+    // but updates when the user moves the λ₀ slider.
+    const yMax = l0 * 1.15;
+    chart2.yMax = yMax;
+
     g('l0-disp').textContent     = l0.toFixed(3);
     g('K-disp').textContent      = String(Math.round(K));
     g('n-disp').textContent      = n.toFixed(1);
@@ -226,21 +246,22 @@ function initOISWidget(root: HTMLElement): void {
     g('hill-disp').textContent   = h.toFixed(3);
     g('lambda-disp').textContent = lambda.toExponential(2);
 
+    const yMid = l0 * 0.5;
     chart2.clear();
-    chart2.drawBackground(X_GRID2, Y_GRID, {
+    chart2.drawBackground(X_GRID2, [0, yMid, l0, yMax], {
       x: [0, 15, 30, 45, 60],
-      y: [0, 0.5, 1],
+      y: [0, l0],
     });
 
     // half-saturation marker at K
     chart2.vLine(K, C_THRESH, 0.5);
 
-    // Hill curve
-    chart2.plotCurve(kv => hill(kv, K, n), C_CURVE);
+    // curve scaled by S_i × λ₀ — visually reflects S_i from chart 1
+    chart2.plotCurve(kv => currentSi * l0 * hill(kv, K, n), C_CURVE);
 
-    // current k position
-    chart2.crosshair(k, h, C_POINT);
-    chart2.dot(k, h, C_POINT);
+    // current k position (on the actual λ curve, not normalized Hill)
+    chart2.crosshair(k, lambda, C_POINT);
+    chart2.dot(k, lambda, C_POINT);
   }
 
   [slopeIn, actIn, inhIn].forEach(s => s.addEventListener('input', drawSi));

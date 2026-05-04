@@ -86,8 +86,12 @@ const crosshairPlugin = {
       const labelX = xPx + 8 > chartArea.right - 55 ? xPx - 55 : xPx + 8;
 
       ctx.font = 'bold 12px ui-monospace, monospace';
-      ctx.fillStyle = ds.borderColor;
       ctx.textAlign = 'left';
+      const tw = ctx.measureText(label).width;
+      const pad = 3;
+      ctx.fillStyle = 'rgba(0,0,0,0.72)';
+      ctx.fillRect(labelX - pad, yMid - 10, tw + pad * 2, 16);
+      ctx.fillStyle = '#ffffff';
       ctx.fillText(label, labelX, yMid + 4);
     });
 

@@ -94,6 +94,10 @@ class GillespieEngine:
         for cell in initial_cells:
             self._cells[cell.id] = cell
             self._next_id = max(self._next_id, cell.id + 1)
+            # Replay pre-existing mutations so plugins (e.g. OIS) can set t_trigger
+            for mut_id in cell.state.mutations:
+                for plugin in self._plugins.values():
+                    plugin.on_mutation_acquired(mut_id, cell.state, step=0)
 
         t = 0.0
         step = 0

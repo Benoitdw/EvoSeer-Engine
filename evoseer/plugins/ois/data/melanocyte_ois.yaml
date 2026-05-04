@@ -8,8 +8,8 @@ sigmoid:
   threshold: 0.20   # WT: A=0 → S_i = σ(0) = 0.5 (armed but unengaged)
 
 ois:
-  lambda_0: 0.01
-  K_0: 15.0        # half-saturation (divisions)
+  lambda_0: 1
+  K_0: 5        # half-saturation (divisions)
   n: 2             # Hill coefficient
 
 nodes:

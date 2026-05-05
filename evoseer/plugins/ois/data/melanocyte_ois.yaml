@@ -8,12 +8,12 @@ sigmoid:
   threshold: 0.20   # WT: A=0 → S_i = σ(0) = 0.5 (armed but unengaged)
 
 ois:
-  lambda_0: 1
-  K_0: 5        # half-saturation (divisions)
-  n: 2             # Hill coefficient
+  lambda_0: 0.64
+  K_0: 1.168        # half-saturation (divisions)
+  n: 5.661             # Hill coefficient
 
 nodes:
-  BRAF:   { gene_id: 673,  weight: 0.90 }   # dominant driver (~50% melanoma nevi)
+  BRAF:   { gene_id: 673,  weight: 0.50 }   # dominant driver (~50% melanoma nevi)
   NRAS:   { gene_id: 4893, weight: 0.20 }   # second most common (~20%)
   KRAS:   { gene_id: 3845, weight: 0.05 }
   CDKN2A: { gene_id: 1029, weight: 0.10 }   # output node; GOF adds weakly

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-import sys
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from evoseer.core.config import load_config
 from evoseer.engine.gillespie import GillespieEngine
@@ -59,34 +61,34 @@ def _make_founders(engine: GillespieEngine) -> list:
     return founders
 
 
+def run_single(config_path: Path, seed: int) -> list[float]:
+    """Run one simulation and return non-wt clone sizes."""
+    logger.debug("run_single seed=%d config=%s", seed, config_path)
+    config = load_config(config_path)
+    config.seed = seed
+
+    store = build_erk_ois_store()
+    engine = _build_engine(config, store)
+    founders = _make_founders(engine)
+    result = engine.run(founders)
+
+    exporter = SimulationExporter(result, store, config)
+    data = exporter.export()
+
+    clones = [
+        float(node["final_size"])
+        for node in data["clone_tree"]["nodes"]
+        if node["id"] != "wt" and node["final_size"] > 0
+    ]
+    logger.debug("  → %d clones", len(clones))
+    return clones
+
+
 def run_batch(config_path: Path, n_sims: int, base_seed: int) -> list[float]:
-    """
-    Run n_sims simulations and return pooled non-wt clone sizes.
-
-    Each simulation uses seed = base_seed + i. Clone sizes from all runs
-    are concatenated into one flat list (excluding the founding wt clone).
-    """
+    """Run n_sims simulations and return pooled non-wt clone sizes."""
+    logger.info("run_batch n=%d base_seed=%d", n_sims, base_seed)
     pooled: list[float] = []
-
     for i in range(n_sims):
-        config = load_config(config_path)
-        config.seed = base_seed + i
-
-        store = build_erk_ois_store()
-        engine = _build_engine(config, store)
-        founders = _make_founders(engine)
-        result = engine.run(founders)
-
-        exporter = SimulationExporter(result, store, config)
-        data = exporter.export()
-
-        for node in data["clone_tree"]["nodes"]:
-            if node["id"] != "wt" and node["final_size"] > 0:
-                pooled.append(float(node["final_size"]))
-
-        print(
-            f"  run {i + 1}/{n_sims} — {len(data['clone_tree']['nodes']) - 1} clones",
-            file=sys.stderr,
-        )
-
+        pooled.extend(run_single(config_path, seed=base_seed + i))
+        logger.debug("  run %d/%d — pooled=%d", i + 1, n_sims, len(pooled))
     return pooled

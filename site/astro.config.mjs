@@ -62,6 +62,7 @@ export default defineConfig({
           label: 'Notebooks',
           items: [
             { label: 'Birth-Death Model', slug: 'notebooks/birth-death' },
+            { label: 'ABC — Samples per Simulation', slug: 'notebooks/abc-samples' },
           ],
         },
         {

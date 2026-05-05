@@ -4,87 +4,65 @@ description: "How many samples are needed per set of parameters to reliably esti
               the simulated distribution in an ABC framework?"
 status: "in-progress"
 ---
+import MermaidChart from '../../../components/MermaidChart.astro';
 
 ## Rationale
 
-In Approximate Bayesian Computation (ABC), each candidate parameter set θ is evaluated by comparing a simulated distribution $F_n$ (based on n stochastic runs) to a reference distribution $R$. A sufficient number of runs per parameter set is needed to ensure that rejection of $\theta$ reflects a genuine mismatch between the model and the data — and not simply a poor Monte Carlo estimate of the underlying distribution.
+In Approximate Bayesian Computation (ABC), each candidate parameter set θ (the vector of biological parameters — division rate, death rate, mutation rate, senescence, etc.) is evaluated by comparing a simulated distribution $F_n$ (based on n stochastic runs) to a reference distribution $R$. A sufficient number of runs per parameter set is needed to ensure that rejection of $\theta$ reflects a genuine mismatch between the model and the data — and not simply a poor Monte Carlo estimate of the underlying distribution.
 
 Mathematically, we define $D(F_n, R)$ as a distance between the empirical distribution F_n (based on n Gillespie simulations) and the reference distribution $R$. We want to find the minimal $n$ such that the variance of $D$ is negligible — i.e. adding more simulations does not meaningfully change our estimate of the distance.
 
-## Theoretical background
+## What theory tells us
 
-Estimating an unknown distribution $F$ from $n$ (independant and identically distributted) i.i.d. samples is a well-studied problem in nonparametric statistics. The answer depends critically on *what* we want to measure.
-
-- **Estimating a scalar parameter** (e.g. the mean): the standard error decreases as $O(1/√n)$ by the Central Limit Theorem, so ~1500 samples are needed for ε = 0.05.
-- **Estimating the full CDF uniformly**: the Dvoretzky-Kiefer-Wolfowitz (DKW) inequality gives a distribution-free bound: n ≥ ln(2/δ) / (2ε²). For ε = 0.05 and δ = 0.05, this yields n ≈ 738, regardless of the underlying distribution.
-- **Estimating the density (PDF)**: much harder. The optimal MISE for kernel density estimators converges as $O(n^{−4/5})$ in dimension 1, degrading rapidly with dimension (curse of dimensionality).
-
-In our case, we do not need to estimate the full density — we only need $D(F_n, R)$ to be a stable estimator of $D(F, R)$. By the functional CLT (Donsker's theorem), the empirical process $√n(F_n − F)$ converges to a Brownian bridge, which implies that any functional of $F_n$ (including our distance metrics) has a standard error decreasing as O(1/√n). The irreducible plateau visible in our empirical curves (see below) corresponds to the intrinsic stochastic variance of the Gillespie simulator itself — a lower bound that no amount of additional simulation can remove.
-
-## Empirical estimation
-
-To determine $n$ empirically, we fixed a reference parameter set and ran N = 500
-Gillespie simulations. At each step $n$, we computed four distances between $F_n$ and $R$:
-L1, L2, Kolmogorov-Smirnov (KS), and Wasserstein-1. The resulting curves were smoothed
-and the first n where the relative variation fell below a threshold τ was recorded.
-
-![Convergence of distance metrics as a function of n](/EvoSeer-Engine/research-notes/sample-by-simulation-convergence.png)
-
-All four metrics show the same qualitative pattern: a rapid decrease up to n ≈ 20–50,
-followed by damped oscillations and a clear plateau beyond n ≈ 100–150. KS converges
-fastest (n = 26 for τ = 0.01), consistent with theory — it measures a bounded
-functional of the CDF and is less sensitive to tail behaviour. L1 and Wasserstein
-converge similarly (n ≈ 121), while L2 requires slightly more samples for strict
-thresholds (n = 331 for τ = 0.0001).
-
-For a threshold of τ = 0.01, **n ≈ 120–150 simulations** appears sufficient across
-all metrics.
+This is a well-studied problem in nonparametric statistics (CLT, DKW inequality, empirical process theory). The short answer: any distance computed from $F_n$ converges to its true value at rate $O(1/\sqrt{n})$ — doubling simulations halves the error, but with diminishing returns. More importantly, convergence hits a floor: the irreducible stochastic variance of the Gillespie process itself. Two runs with identical θ produce different trajectories — that's not estimation noise, it's biological noise. No amount of extra simulation removes it.
 
 ## The chicken-and-egg problem
 
-The natural question is: can we determine n *before* running simulations? This requires
-knowing σ²_sim, the variance of the simulator — but this variance itself depends on the
-parameters θ being evaluated. In regions of parameter space near bifurcation points
-(e.g. the OIS transition driven by BRAF V600E), the distribution of trajectories becomes
-bimodal and variance can increase dramatically. A fixed n calibrated on one region may
-be grossly insufficient in another.
+To pick $n$, we need to know how noisy the simulator is at θ. But that noise depends on θ — and varies a lot: near the OIS bifurcation (e.g. BRAF V600E), trajectories become bimodal and variance spikes. A fixed $n$ calibrated on one region of parameter space may be completely wrong in another.
 
-This is a genuine chicken-and-egg problem: estimating n requires knowing σ²_sim, and
-knowing σ²_sim requires running simulations.
+We can't know $n$ without running simulations, and we can't know how many simulations to run without knowing $n$.
+
+![Convergence of distance metrics as a function of n](/EvoSeer-Engine/research-notes/sample-by-simulation-convergence.png)
+
+All four metrics (L1, L2, KS, Wasserstein) show the same pattern: rapid drop up to n ≈ 20–50, then a plateau around n ≈ 100–150. For τ = 0.01, **n ≈ 120–150** is sufficient (see [notebook](/EvoSeer-Engine/notebooks/abc-samples/)).
 
 ## Solution: sequential stopping rule
 
-Rather than fixing n in advance, we adopt a **sequential stopping rule** analogous to
-early stopping in machine learning: simulations are added incrementally and stopped when
-the estimated gain in D falls below a threshold.
-
-Concretely, at each iteration we compute the smoothed derivative of D(F_n, R) with
-respect to n. We stop when:
+Rather than fixing $n$ upfront, we add simulations incrementally and stop when the marginal
+gain in $D(F_n, R)$ falls below a threshold:
 
 $$\left| \frac{\Delta D}{\Delta n} \right| < \tau$$
 
-This mirrors the early stopping criterion used in neural network training, where
-optimization is halted when the validation loss ceases to improve. The key theoretical
-parallel is that both procedures track the **marginal gain of a noisy signal** that
-decreases as O(1/√n), and stop at the empirical elbow of this curve. Unlike ML early
-stopping — which also guards against overfitting and can see the loss *increase* —
-our signal only oscillates around a stable plateau, making the stopping criterion more
-robust and easier to calibrate.
-
-This approach is formalized in the simulation literature as a **sequential stopping
-rule** (Law & Kelton, *Simulation Modeling and Analysis*) and can be seen as a
-**learning curve analysis** of the stochastic simulator: we ask not "does more data
-help the model?" but "does more simulation help the estimator?"
+This is the simulation equivalent of early stopping in ML — track the elbow of the convergence
+curve and stop there. It adapts automatically to the local variance of the simulator, solving
+the chicken-and-egg problem without any prior knowledge of θ.
 
 ## Practical recommendation
 
-Based on the empirical analysis above, we recommend **n = 150 simulations per parameter
-set** as a default for EvoSeer's ABC procedure under the current parameterization. This
-value should be re-evaluated:
+Rather than a fixed $n$, we use a **multi-stage stopping rule** that tightens the convergence
+threshold progressively and can early-reject a bad θ before full convergence — saving compute.
 
-- In parameter regions suspected to be near the OIS bifurcation
-- When the reference distribution R changes substantially (e.g. different patient data)
-- If a stricter distance threshold is adopted in the ABC acceptance criterion
+Let $\varepsilon$ be the ABC acceptance threshold (the maximum $D$ to accept θ).
 
-A lightweight pilot study (n = 50 runs on a coarse parameter grid) can be used to
-map σ²_sim across the parameter space and identify regions requiring larger n.
+<MermaidChart diagram={`
+flowchart LR
+    A([Run simulations]) --> B{"|ΔD/Δn| < 10%?"}
+    B -- No --> A
+    B -- Yes --> C{"D > 10ε ?"}
+    C -- Yes --> R1([Reject θ])
+    C -- No --> D{"|ΔD/Δn| < 5%?"}
+    D -- No --> A
+    D -- Yes --> E{"D > 5ε ?"}
+    E -- Yes --> R2([Reject θ])
+    E -- No --> F{"|ΔD/Δn| < 1%?"}
+    F -- No --> A
+    F -- Yes --> G{"D > ε ?"}
+    G -- Yes --> R3([Reject θ])
+    G -- No --> ACC([Accept θ])
+` } />
+The logic: at τ = 10%, the estimate is rough but if $D$ is already 10× above the acceptance
+threshold, there is no realistic path to acceptance — reject immediately. Each stage tightens
+both the convergence criterion and the early-rejection bar. Only θ that survive all three
+stages reach the final accept/reject decision at full precision.
+
+Additional stages can be added by inserting `(τ, k)` pairs — the pattern generalises cleanly.

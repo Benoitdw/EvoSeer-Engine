@@ -2,11 +2,21 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from evoseer.core.cell import CellState
 from evoseer.core.context import SimContext
-from evoseer.plugins.ois import OISPluginState
-from evoseer.plugins.ois.melanocyte import MelanocyteOISPlugin
+from evoseer.plugins.ois import OISPlugin, OISPluginState
 from evoseer.services.mutation_store import InMemoryMutationStore, MutationRecord
+
+
+# ── Test plugin with stable test YAML ──────────────────────────────────────────
+
+class _TestOISPlugin(OISPlugin):
+    """OIS plugin that uses tests/data/ois_test.yaml (threshold=0 for σ(0)=0.5)."""
+    name = "test_ois"
+    pathway_file = Path(__file__).parents[2] / "data" / "ois_test.yaml"
+    involved_pathways = ["OIS"]
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -24,8 +34,8 @@ def _store() -> InMemoryMutationStore:
     return s
 
 
-def _plugin() -> MelanocyteOISPlugin:
-    return MelanocyteOISPlugin({}, _store())
+def _plugin() -> _TestOISPlugin:
+    return _TestOISPlugin({}, _store())
 
 
 def _ctx() -> SimContext:

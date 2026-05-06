@@ -76,6 +76,12 @@ export default defineConfig({
             { label: 'Visualizer', slug: 'visualizer' },
           ],
         },
+        {
+          label: 'Research Notes',
+          items: [
+            { label: 'Index', slug: 'research-notes' },
+          ],
+        },
       ],
     }),
   ],

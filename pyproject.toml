@@ -11,11 +11,13 @@ requires-python = ">=3.11"
 dependencies = [
     "ipywidgets>=8.1.8",
     "numpy>=2.4.4",
+    "polars>=1.40.1",
     "pyyaml>=6.0.3",
+    "scipy>=1.17.1",
 ]
 
 [tool.setuptools.packages.find]
-include = ["evoseer*"]
+include = ["evoseer*", "calibration*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -28,5 +30,6 @@ dev = [
     "networkx>=3.0",
     "notebook>=7.5.5",
     "pytest>=9.0.3",
+    "seaborn>=0.13.2",
     "tqdm>=4.67.3",
 ]

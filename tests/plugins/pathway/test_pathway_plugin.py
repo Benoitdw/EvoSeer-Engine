@@ -10,7 +10,7 @@ from evoseer.plugins.pathway import PathwayDefinition, derive_roles
 from evoseer.plugins.pathway.erk import ErkPathwayPlugin
 from evoseer.services.mutation_store import InMemoryMutationStore, MutationRecord
 
-ERK_YAML = Path(__file__).parents[3] / "evoseer/plugins/pathway/data/erk.yaml"
+ERK_YAML = Path(__file__).parents[2] / "data" / "erk_test.yaml"
 
 
 # ---------------------------------------------------------------------------

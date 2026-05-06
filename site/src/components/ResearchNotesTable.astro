@@ -1,0 +1,85 @@
+---
+import { getCollection } from 'astro:content';
+
+const allDocs = await getCollection('docs');
+
+const notes = allDocs
+  .filter(doc => doc.id.startsWith('research-notes/') && doc.id !== 'research-notes/index')
+  .sort((a, b) => a.data.title.localeCompare(b.data.title));
+
+const statusLabel: Record<string, string> = {
+  open: 'Open',
+  'in-progress': 'In Progress',
+  closed: 'Closed',
+};
+
+const statusClass: Record<string, string> = {
+  open: 'open',
+  'in-progress': 'in-progress',
+  closed: 'closed',
+};
+---
+
+{notes.length === 0 ? (
+  <p><em>No research notes yet.</em></p>
+) : (
+  <table>
+    <thead>
+      <tr>
+        <th>Note</th>
+        <th>Question</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {notes.map(note => {
+        const status = (note.data as any).status ?? 'open';
+        return (
+          <tr>
+            <td><a href={`/EvoSeer-Engine/research-notes/${note.id.replace('research-notes/', '')}`}>{note.data.title}</a></td>
+            <td>{note.data.description}</td>
+            <td><span class={`status status--${statusClass[status] ?? 'open'}`}>{statusLabel[status] ?? status}</span></td>
+          </tr>
+        );
+      })}
+    </tbody>
+  </table>
+)}
+
+<style>
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+  }
+  tr {
+    border-bottom: 1px solid var(--sl-color-gray-5);
+  }
+  th {
+    font-weight: 600;
+    color: var(--sl-color-white);
+  }
+  .status {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .status--open {
+    background: var(--sl-color-blue-low);
+    color: var(--sl-color-blue-high);
+  }
+  .status--in-progress {
+    background: var(--sl-color-orange-low);
+    color: var(--sl-color-orange-high);
+  }
+  .status--closed {
+    background: var(--sl-color-green-low);
+    color: var(--sl-color-green-high);
+  }
+</style>

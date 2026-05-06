@@ -1,0 +1,27 @@
+name: OIS
+description: "Test OIS pathway — threshold=0 so WT→0.5"
+output_node: CDKN2A
+
+sigmoid:
+  slope: 10
+  threshold: 0.0
+
+ois:
+  lambda_0: 1
+  K_0: 5
+  n: 2
+
+nodes:
+  BRAF:   { gene_id: 673,  weight: 0.50 }
+  NRAS:   { gene_id: 4893, weight: 0.20 }
+  KRAS:   { gene_id: 3845, weight: 0.05 }
+  CDKN2A: { gene_id: 1029, weight: 0.10 }
+
+edges:
+  - { from: BRAF,   to: CDKN2A, type: activates }
+  - { from: NRAS,   to: CDKN2A, type: activates }
+  - { from: KRAS,   to: CDKN2A, type: activates }
+
+suppressors:
+  CDKN2A: { gene_id: 1029, weight: 1.50 }
+  TP53:   { gene_id: 7157, weight: 0.50 }

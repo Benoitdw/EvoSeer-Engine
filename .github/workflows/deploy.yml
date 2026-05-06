@@ -52,7 +52,7 @@ jobs:
       - name: Execute notebooks
         run: |
           notebooks=(
-            "notebooks/birth_death_model.ipynb",
+            "notebooks/simple_birth_death.ipynb",
             "notebooks/ABC_samples_parameters.ipynb",
           )
           for nb in "${notebooks[@]}"; do

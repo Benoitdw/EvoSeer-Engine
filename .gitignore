@@ -6,5 +6,9 @@ dist/
 wheels/
 *.egg-info
 
+
 # Virtual environments
 .venv
+
+# data
+ISIC_2024/*

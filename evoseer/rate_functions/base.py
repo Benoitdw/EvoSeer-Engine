@@ -29,6 +29,7 @@ class RateFunction(ABC):
         scores: dict[str, float],
         plugin_configs: dict[str, PluginConfig],
         N: int,
+        senescent: bool = False,
     ) -> tuple[float, float]:
         """
         Compute (birth_rate, death_rate) for a single cell.

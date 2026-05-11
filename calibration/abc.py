@@ -21,20 +21,27 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class CalibrationResult:
-    accepted: list[tuple[dict, float]] = field(default_factory=list)
-    all_distances: list[float] = field(default_factory=list)
+    runs: list[dict] = field(default_factory=list)
     acceptance_rate: float = 0.0
 
+    # Convenience views
+    @property
+    def all_distances(self) -> list[float]:
+        return [r["distance"] for r in self.runs]
+
+    @property
+    def accepted(self) -> list[dict]:
+        return [r for r in self.runs if r["verdict"] == "accepted"]
+
     def to_json(self) -> str:
+        n_accepted = len(self.accepted)
+        n_total = len(self.runs)
         return json.dumps(
             {
                 "acceptance_rate": self.acceptance_rate,
-                "n_accepted": len(self.accepted),
-                "n_total": len(self.all_distances),
-                "all_distances": self.all_distances,
-                "accepted": [
-                    {"params": p, "distance": d} for p, d in self.accepted
-                ],
+                "n_accepted": n_accepted,
+                "n_total": n_total,
+                "runs": self.runs,
             },
             indent=2,
         )
@@ -87,12 +94,17 @@ class RejectionABC:
             self._n_samples, self._epsilon, self._stages, self._max_sims,
         )
 
+
+    def _tail_variance(self, history: list[float]) -> float:
+        tail = history[-self._smoothing_window:] if history else []
+        return float(np.var(tail)) if len(tail) > 1 else 0.0
+
     def _evaluate(
         self,
         config_path: Path,
         base_seed: int,
-    ) -> tuple[float, int, str]:
-        """Run simulations with multi-stage stopping. Returns (distance, n_sims, verdict)."""
+    ) -> tuple[float, float, int, str]:
+        """Run simulations with multi-stage stopping. Returns (distance, distance_variance, n_sims, verdict)."""
         pooled: list[float] = []
         distance_history: list[float] = []
         stage = 0
@@ -108,31 +120,32 @@ class RejectionABC:
             d = self._distance.compute(pooled)
             distance_history.append(d)
 
-            tau, k = self._stages[stage]
             delta = _smoothed_relative_delta(distance_history, self._smoothing_window)
 
-            logger.debug(
-                "  stage=%d  τ=%.2f  k=%d  D=%.4f  δ=%s",
-                stage, tau, k, d, f"{delta:.4f}" if delta is not None else "n/a",
-            )
+            while True:
+                tau, k = self._stages[stage]
+                logger.debug(
+                    "  stage=%d  τ=%.2f  k=%d  D=%.4f  δ=%s",
+                    stage, tau, k, d, f"{delta:.4f}" if delta is not None else "n/a",
+                )
 
-            if delta is None or delta >= tau:
-                continue
+                if delta is None or delta >= tau:
+                    break  # need more sims to converge this stage
 
-            if d > k * self._epsilon:
-                logger.info(f"  early reject at stage {stage} — D={d:.4f} > {k}×ε ({self._epsilon:.4f})")
-                return d, sim_idx + 1, "rejected_early"
+                if d > k * self._epsilon:
+                    logger.info("  early reject at stage %d — D=%.4f > %d×ε (%.4f)", stage, d, k, self._epsilon)
+                    return d, self._tail_variance(distance_history), sim_idx + 1, "rejected_early"
 
-            stage += 1
-            logger.debug("  converged at stage %d — advancing to stage %d", stage - 1, stage)
+                stage += 1
+                logger.debug("  converged — advancing to stage %d", stage)
 
-            if stage == len(self._stages):
-                verdict = "accepted" if d <= self._epsilon else "rejected"
-                return d, sim_idx + 1, verdict
+                if stage == len(self._stages):
+                    verdict = "accepted" if d <= self._epsilon else "rejected"
+                    return d, self._tail_variance(distance_history), sim_idx + 1, verdict
 
         d = distance_history[-1] if distance_history else float("inf")
         logger.warning("  hit max_sims=%d without full convergence — D=%.4f", self._max_sims, d)
-        return d, self._max_sims, "accepted" if d <= self._epsilon else "rejected"
+        return d, self._tail_variance(distance_history), self._max_sims, "accepted" if d <= self._epsilon else "rejected"
 
     def run(self) -> CalibrationResult:
         rng = np.random.default_rng(self._base_seed)
@@ -144,23 +157,29 @@ class RejectionABC:
             logger.debug("  sampled params: %s", params)
             tmp_config = generate(self._base_config, params)
 
+            output_dir = str(tmp_config.parent / tmp_config.stem)
             try:
                 sim_seed = self._base_seed + iteration * self._max_sims
-                distance, n_sims, verdict = self._evaluate(tmp_config, sim_seed)
+                distance, distance_variance, n_sims, verdict = self._evaluate(tmp_config, sim_seed)
             finally:
                 tmp_config.unlink(missing_ok=True)
 
-            result.all_distances.append(distance)
-            if verdict == "accepted":
-                result.accepted.append((params, distance))
-                logger.info("  ✓ accepted  d=%.4f  n=%d", distance, n_sims)
-            else:
-                logger.info("  ✗ %-14s d=%.4f  n=%d", verdict, distance, n_sims)
+            result.runs.append({
+                "params": params,
+                "distance": distance,
+                "distance_variance": distance_variance,
+                "n_sims": n_sims,
+                "verdict": verdict,
+                "output_dir": output_dir,
+            })
 
-        n = len(result.all_distances)
-        result.acceptance_rate = len(result.accepted) / n if n > 0 else 0.0
-        logger.info(
-            "[ABC] done — accepted %d/%d  (rate=%.2f%%)",
-            len(result.accepted), n, result.acceptance_rate * 100,
-        )
+            if verdict == "accepted":
+                logger.info(f"  ✓ accepted  d={distance:.4f}  var={distance_variance:.6f}  n={n_sims}")
+            else:
+                logger.info(f"  ✗ {verdict:<14} d={distance:.4f}  var={distance_variance:.6f}  n={n_sims}")
+
+        n = len(result.runs)
+        n_accepted = len(result.accepted)
+        result.acceptance_rate = n_accepted / n if n > 0 else 0.0
+        logger.info(f"[ABC] done — accepted {n_accepted}/{n}  (rate={result.acceptance_rate * 100:.2f}%)")
         return result

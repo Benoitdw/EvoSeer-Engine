@@ -1,0 +1,257 @@
+{
+  "acceptance_rate": 0.0,
+  "n_accepted": 0,
+  "n_total": 10,
+  "runs": [
+    {
+      "params": {
+        "melanocyte_ois": {
+          "pathway_overrides": {
+            "sigmoid_threshold": 0.7739560485559633,
+            "sigmoid_slope": 4.388784397520523
+          },
+          "ois_overrides": {
+            "lambda_0": 0.8600119407122686,
+            "K_0": 14.098676566657597,
+            "n": 1.8835469577529906
+          }
+        },
+        "erk_pathway": {
+          "pathway_overrides": {
+            "sigmoid_threshold": 0.9768412340549182,
+            "sigmoid_slope": 15.22279403980706
+          }
+        }
+      },
+      "distance": 0.6014233690839974,
+      "distance_variance": 0.003946966174263601,
+      "n_sims": 5,
+      "verdict": "rejected_early"
+    },
+    {
+      "params": {
+        "melanocyte_ois": {
+          "pathway_overrides": {
+            "sigmoid_threshold": 0.7860643052769538,
+            "sigmoid_slope": 1.2811363267554587
+          },
+          "ois_overrides": {
+            "lambda_0": 0.45588207851661144,
+            "K_0": 7.730561472535334,
+            "n": 18.535299776972035
+          }
+        },
+        "erk_pathway": {
+          "pathway_overrides": {
+            "sigmoid_threshold": 0.6616718640766314,
+            "sigmoid_slope": 16.455232265416598
+          }
+        }
+      },
+      "distance": 0.6770731390680861,
+      "distance_variance": 0.0006250000000000011,
+      "n_sims": 5,
+      "verdict": "rejected_early"
+    },
+    {
+      "params": {
+        "melanocyte_ois": {
+          "pathway_overrides": {
+            "sigmoid_threshold": 0.44341419882733113,
+            "sigmoid_slope": 2.272387217847769
+          },
+          "ois_overrides": {
+            "lambda_0": 0.5590389391456765,
+            "K_0": 1.7444364940314188,
+            "n": 16.55262343985164
+          }
+        },
+        "erk_pathway": {
+          "pathway_overrides": {
+            "sigmoid_threshold": 0.6500811791659616,
+            "sigmoid_slope": 15.161754801707477
+          }
+        }
+      },
+      "distance": 0.5270731390680861,
+      "distance_variance": 2.017403630286915e-05,
+      "n_sims": 6,
+      "verdict": "rejected_early"
+    },
+    {
+      "params": {
+        "melanocyte_ois": {
+          "pathway_overrides": {
+            "sigmoid_threshold": 0.35452596812986836,
+            "sigmoid_slope": 9.706980243949033
+          },
+          "ois_overrides": {
+            "lambda_0": 0.8941899101089757,
+            "K_0": 15.678478192938357,
+            "n": 3.8927741570393515
+          }
+        },
+        "erk_pathway": {
+          "pathway_overrides": {
+            "sigmoid_threshold": 0.49338495354068246,
+            "sigmoid_slope": 0.8760753157445755
+          }
+        }
+      },
+      "distance": 0.8020731390680861,
+      "distance_variance": 0.00390625,
+      "n_sims": 4,
+      "verdict": "rejected_early"
+    },
+    {
+      "params": {
+        "melanocyte_ois": {
+          "pathway_overrides": {
+            "sigmoid_threshold": 0.15428949206754783,
+            "sigmoid_slope": 6.830489532424546
+          },
+          "ois_overrides": {
+            "lambda_0": 0.747314534348739,
+            "K_0": 19.366439782467094,
+            "n": 6.516507162763039
+          }
+        },
+        "erk_pathway": {
+          "pathway_overrides": {
+            "sigmoid_threshold": 0.4019367207331254,
+            "sigmoid_slope": 9.391116225516159
+          }
+        }
+      },
+      "distance": 0.5965043240328347,
+      "distance_variance": 0.0,
+      "n_sims": 5,
+      "verdict": "rejected_early"
+    },
+    {
+      "params": {
+        "melanocyte_ois": {
+          "pathway_overrides": {
+            "sigmoid_threshold": 0.1894713590842857,
+            "sigmoid_slope": 1.2992150533547164
+          },
+          "ois_overrides": {
+            "lambda_0": 0.4809478769636744,
+            "K_0": 4.92473230649224,
+            "n": 13.396279893650206
+          }
+        },
+        "erk_pathway": {
+          "pathway_overrides": {
+            "sigmoid_threshold": 0.46529432292871414,
+            "sigmoid_slope": 16.65356392115675
+          }
+        }
+      },
+      "distance": 0.5937398057347527,
+      "distance_variance": 0.00027777777777777767,
+      "n_sims": 5,
+      "verdict": "rejected_early"
+    },
+    {
+      "params": {
+        "melanocyte_ois": {
+          "pathway_overrides": {
+            "sigmoid_threshold": 0.7002651020022491,
+            "sigmoid_slope": 3.123666413820411
+          },
+          "ois_overrides": {
+            "lambda_0": 0.8339372033812491,
+            "K_0": 16.192904971187637,
+            "n": 7.74956758060349
+          }
+        },
+        "erk_pathway": {
+          "pathway_overrides": {
+            "sigmoid_threshold": 0.3239116987337319,
+            "sigmoid_slope": 13.64991007949951
+          }
+        }
+      },
+      "distance": 0.46809003575066405,
+      "distance_variance": 0.0006250000000000025,
+      "n_sims": 5,
+      "verdict": "rejected_early"
+    },
+    {
+      "params": {
+        "melanocyte_ois": {
+          "pathway_overrides": {
+            "sigmoid_threshold": 0.1397524836093098,
+            "sigmoid_slope": 1.9990820247510832
+          },
+          "ois_overrides": {
+            "lambda_0": 0.017288647053495455,
+            "K_0": 15.845025361291698,
+            "n": 13.297017131840644
+          }
+        },
+        "erk_pathway": {
+          "pathway_overrides": {
+            "sigmoid_threshold": 0.7199071096950184,
+            "sigmoid_slope": 15.614580620439359
+          }
+        }
+      },
+      "distance": 0.4985017104966574,
+      "distance_variance": 0.00027182345321186623,
+      "n_sims": 6,
+      "verdict": "rejected_early"
+    },
+    {
+      "params": {
+        "melanocyte_ois": {
+          "pathway_overrides": {
+            "sigmoid_threshold": 0.45891577553833995,
+            "sigmoid_slope": 5.687411959528937
+          },
+          "ois_overrides": {
+            "lambda_0": 0.14839902814638087,
+            "K_0": 2.7333364339514823,
+            "n": 13.368059235809433
+          }
+        },
+        "erk_pathway": {
+          "pathway_overrides": {
+            "sigmoid_threshold": 0.49754139583597584,
+            "sigmoid_slope": 11.304722129623777
+          }
+        }
+      },
+      "distance": 0.5965043240328347,
+      "distance_variance": 0.0,
+      "n_sims": 4,
+      "verdict": "rejected_early"
+    },
+    {
+      "params": {
+        "melanocyte_ois": {
+          "pathway_overrides": {
+            "sigmoid_threshold": 0.7649988574160256,
+            "sigmoid_slope": 6.347183200005908
+          },
+          "ois_overrides": {
+            "lambda_0": 0.5580436066514158,
+            "K_0": 11.404539634535563,
+            "n": 6.079001961252244
+          }
+        },
+        "erk_pathway": {
+          "pathway_overrides": {
+            "sigmoid_threshold": 0.07927694283954244,
+            "sigmoid_slope": 8.734347784647248
+          }
+        }
+      },
+      "distance": 0.44990821756884586,
+      "distance_variance": 8.264462809917361e-05,
+      "n_sims": 9,
+      "verdict": "rejected_early"
+    }
+  ]
+}

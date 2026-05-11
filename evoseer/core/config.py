@@ -45,6 +45,7 @@ class RateFunctionConfig:
     function_type: str = "weighted_sum"
     baseline_birth_rate: float = 0.5
     baseline_death_rate: float = 0.2
+    carrying_capacity: float | None = None
     params: dict[str, Any] = field(default_factory=dict)
 
 
@@ -52,7 +53,7 @@ class RateFunctionConfig:
 class RecorderConfig:
     """Configuration for the Recorder."""
 
-    output_dir: str = "results/"
+    output_dir: Path = Path("results/")
     snapshot_interval: int = 500
     dump_final_state: bool = True
 
@@ -72,6 +73,7 @@ class SimulationConfig:
     )
     rate_function: RateFunctionConfig = field(default_factory=RateFunctionConfig)
     recorder: RecorderConfig = field(default_factory=RecorderConfig)
+    export_path : Path | None = None
 
     def plugins_by_name(self) -> dict[str, PluginConfig]:
         """Return a dict mapping plugin name -> PluginConfig."""
@@ -100,7 +102,8 @@ def load_config(path: str | Path) -> SimulationConfig:
         function_type=rf_raw.get("type", "weighted_sum"),
         baseline_birth_rate=rf_raw.get("baseline_birth_rate", 0.5),
         baseline_death_rate=rf_raw.get("baseline_death_rate", 0.2),
-        params={k: v for k, v in rf_raw.items() if k not in {"type"}},
+        carrying_capacity=rf_raw.get("carrying_capacity", None),
+        params={k: v for k, v in rf_raw.items() if k not in {"type", "baseline_birth_rate", "baseline_death_rate", "carrying_capacity"}},
     )
 
     # Mutation store
@@ -120,9 +123,9 @@ def load_config(path: str | Path) -> SimulationConfig:
     # Recorder
     rec_raw = raw.get("recorder", {})
     cfg.recorder = RecorderConfig(
-        output_dir=rec_raw.get("output_dir", "results/"),
-        snapshot_interval=sim_raw.get("snapshot_interval", 500),
-        dump_final_state=sim_raw.get("dump_final_state", True),
+        output_dir=Path(rec_raw.get("output_dir", "results/")),
+        snapshot_interval=rec_raw.get("snapshot_interval", 500),
+        dump_final_state=rec_raw.get("dump_final_state", True),
     )
 
     # Plugins

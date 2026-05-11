@@ -1,0 +1,127 @@
+{
+  "acceptance_rate": 0.0,
+  "n_accepted": 0,
+  "n_total": 10,
+  "runs": [
+    {
+      "params": {
+        "rate_function": {
+          "carrying_capacity": 409.5824194223853
+        }
+      },
+      "distance": 28.617586249568337,
+      "distance_variance": 4.0897107303171705,
+      "n_sims": 20,
+      "verdict": "rejected_early",
+      "output_dir": "/tmp/evoseer_abc_1facr_s3"
+    },
+    {
+      "params": {
+        "rate_function": {
+          "carrying_capacity": 275.5513759008209
+        }
+      },
+      "distance": 23.07900902361934,
+      "distance_variance": 1.9270381246408157,
+      "n_sims": 28,
+      "verdict": "rejected_early",
+      "output_dir": "/tmp/evoseer_abc_8n21zv56"
+    },
+    {
+      "params": {
+        "rate_function": {
+          "carrying_capacity": 443.439167964553
+        }
+      },
+      "distance": 32.59832218883107,
+      "distance_variance": 5.6948689253564835,
+      "n_sims": 20,
+      "verdict": "rejected_early",
+      "output_dir": "/tmp/evoseer_abc_asvdi9eb"
+    },
+    {
+      "params": {
+        "rate_function": {
+          "carrying_capacity": 378.94721162374555
+        }
+      },
+      "distance": 23.476485582519064,
+      "distance_variance": 3.7154290337976414,
+      "n_sims": 27,
+      "verdict": "rejected_early",
+      "output_dir": "/tmp/evoseer_abc_1igjh4oj"
+    },
+    {
+      "params": {
+        "rate_function": {
+          "carrying_capacity": 137.6709391550598
+        }
+      },
+      "distance": 23.058697094434994,
+      "distance_variance": 0.7205819442900314,
+      "n_sims": 31,
+      "verdict": "rejected_early",
+      "output_dir": "/tmp/evoseer_abc_q8hcgfze"
+    },
+    {
+      "params": {
+        "rate_function": {
+          "carrying_capacity": 490.2489406547024
+        }
+      },
+      "distance": 30.320381897002086,
+      "distance_variance": 5.687548075334609,
+      "n_sims": 20,
+      "verdict": "rejected_early",
+      "output_dir": "/tmp/evoseer_abc_v9cxqia3"
+    },
+    {
+      "params": {
+        "rate_function": {
+          "carrying_capacity": 404.4558807961412
+        }
+      },
+      "distance": 21.097254868972342,
+      "distance_variance": 0.7134831125785743,
+      "n_sims": 42,
+      "verdict": "rejected_early",
+      "output_dir": "/tmp/evoseer_abc__78mq6jt"
+    },
+    {
+      "params": {
+        "rate_function": {
+          "carrying_capacity": 414.4257221107815
+        }
+      },
+      "distance": 31.08766323281781,
+      "distance_variance": 10.300230834327813,
+      "n_sims": 21,
+      "verdict": "rejected_early",
+      "output_dir": "/tmp/evoseer_abc_gr4es3ia"
+    },
+    {
+      "params": {
+        "rate_function": {
+          "carrying_capacity": 151.24545307021833
+        }
+      },
+      "distance": 23.720749037499573,
+      "distance_variance": 2.41244848222282,
+      "n_sims": 22,
+      "verdict": "rejected_early",
+      "output_dir": "/tmp/evoseer_abc_dkxll0fr"
+    },
+    {
+      "params": {
+        "rate_function": {
+          "carrying_capacity": 280.15437515822686
+        }
+      },
+      "distance": 23.906247550301952,
+      "distance_variance": 4.508849843875202,
+      "n_sims": 21,
+      "verdict": "rejected_early",
+      "output_dir": "/tmp/evoseer_abc_uaeorrym"
+    }
+  ]
+}

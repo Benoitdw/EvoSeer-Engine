@@ -4,10 +4,9 @@ description: Approximate Bayesian Computation calibration of plugin parameters
 ---
 
 import MermaidChart from '../../../components/MermaidChart.astro';
+import { Aside } from '@astrojs/starlight/components';
 
-EvoSeer uses **Approximate Bayesian Computation (ABC)** to infer the `weight` (w) and `alpha` (α)
-of each plugin by comparing the clone-size distribution produced by the simulator to an observed
-distribution — here derived from ISIC 2024 benign lesion area data (`tbp_lv_areaMM2`).
+EvoSeer uses **Approximate Bayesian Computation (ABC)** to infer biological parameters by comparing the clone-size distribution produced by the simulator to an observed distribution — here derived from ISIC 2024 benign lesion area data (`tbp_lv_areaMM2`).
 
 The engine itself is never modified. The calibration layer sits entirely above it.
 
@@ -15,33 +14,49 @@ The engine itself is never modified. The calibration layer sits entirely above i
 
 <MermaidChart diagram={`
 flowchart TD
-    P["Parameters\\n• weight w per plugin\\n• alpha α per plugin"]
-    E["EvoSeer-Engine\\n× n_sims runs"]
-    ABC["ABC Calibration\\npool clone sizes\\ncompute distance to target"]
-    D{"distance < ε ?"}
-    CP["Sample new params\\nfrom prior"]
-    OUT["Accepted\\nposterior sample"]
+    P["Sample params from prior\\n(nested: plugin → group → value)"]
+    E["EvoSeer-Engine\\n× n sims"]
+    ABC["Pool clone sizes\\ncompute distance to target"]
+    S{"Multi-stage\\nstopping rule"}
+    CP["Sample new params"]
+    OUT["Store run result\\n(params, distance, variance, verdict)"]
 
     P --> E
     E --> ABC
-    ABC --> D
-    D -- No --> CP
+    ABC --> S
+    S -- "early reject" --> OUT
+    S -- "converged all stages" --> OUT
+    S -- "still converging" --> E
+    OUT --> CP
     CP --> P
-    D -- Yes --> OUT
 `} />
 
-## Method — Rejection ABC
+## Method — Rejection ABC with multi-stage stopping
 
 For each iteration:
 
-1. **Sample** a parameter set `{plugin → (w, α)}` from the prior distribution
-2. **Generate** a temporary `config.yaml` with those parameters applied
-3. **Run** `n_sims` independent simulations (each with a different seed)
-4. **Pool** all non-founding clone sizes across runs into one flat distribution
-5. **Compute** distance between the pooled distribution and the target
-6. **Accept** if `distance < ε`, discard otherwise
+1. **Sample** a parameter set from the prior (supports arbitrarily nested groups)
+2. **Generate** a temporary `config.yaml` with those parameters applied via deep merge
+3. **Run** simulations incrementally, pooling clone sizes after each one
+4. **Check** convergence stage by stage — advance to the next stage when the smoothed distance stabilises; early-reject if the current distance already exceeds the stage threshold
+5. **Store** every run (accepted or not) with `params`, `distance`, `distance_variance`, `n_sims`, `verdict`
 
-The accepted samples approximate the ABC posterior over `(w, α)`.
+All runs are saved — not just accepted ones — enabling full posterior diagnostics.
+
+### Multi-stage stopping
+
+Stages are defined as `[τ, k]` pairs. At each stage the engine checks:
+
+- **Convergence**: smoothed relative change in distance `< τ` over the last window
+- **Early reject**: if converged but `distance > k × ε`, stop immediately — no further sims will help
+- **Advance**: if converged and `distance ≤ k × ε`, move to the next stricter stage without collecting more sims first
+
+```yaml
+stages:
+  - [0.10, 5]    # stage 0 — coarse: reject if D > 5ε
+  - [0.05, 2.5]  # stage 1 — medium: reject if D > 2.5ε
+  - [0.01, 1.0]  # stage 2 — fine:   accept only if D ≤ ε
+```
 
 ## Loss functions
 
@@ -49,55 +64,112 @@ The distance metric is pluggable — set `distance:` in `calibration.yaml`:
 
 | Key | Description |
 |-----|-------------|
-| `ks` | Kolmogorov-Smirnov statistic (default) |
+| `ks` | Kolmogorov-Smirnov statistic — size-invariant, bounded [0, 1] **(recommended)** |
 | `wasserstein` | Earth mover's distance |
-| `l1` | Mean absolute difference on sorted vectors |
-| `l2` | RMSE on sorted vectors |
+| `MSE` | RMSE on quantile vectors |
+| `l1` | Mean absolute difference on sorted vectors (sensitive to sample size mismatch) |
+| `l2` | RMSE on sorted vectors (sensitive to sample size mismatch) |
 
-Override `load_target()` in `calibration/target.py` to change the observed distribution.
+<Aside type="caution">
+`l1` and `l2` pad with zeros when the simulated and observed distributions have different sizes. This makes the distance sensitive to the number of pooled clones rather than their distribution shape — prefer `ks` unless you control the sample sizes.
+</Aside>
 
 ## Configuration
 
 ```yaml
 # calibration.yaml
-base_config: evoseer/config/default.yaml
+base_config: evoseer/config/erk_ois.yaml
 
-n_samples: 500        # total ABC iterations
-n_sims: 50            # simulations pooled per parameter set
-epsilon: 0.1          # acceptance threshold
-distance: ks
-base_seed: 42
+n_samples:       50      # total ABC iterations
+max_sims:        100     # max simulations pooled per parameter set
+epsilon:         0.1     # acceptance threshold
+distance:        ks
+base_seed:       42
+smoothing_window: 5      # window size for convergence check
+
+stages:
+  - [0.10, 5]
+  - [0.05, 2.5]
+  - [0.01, 1.0]
 
 target:
   data_dir: /path/to/ISIC_2024
 
 priors:
-  mapk:
-    weight: [uniform, 0.0, 2.0]
-    alpha:  [uniform, -1.0, 1.0]
-  ois:
-    weight: [uniform, -2.0, 0.0]
-    alpha:  [uniform, -1.0, 1.0]
+  melanocyte_ois:
+    pathway_overrides:
+      sigmoid_threshold: [uniform, 0.05, 0.40]
+    ois_overrides:
+      lambda_0: [uniform, 0.1, 2.0]
+      K_0:      [uniform, 0.5, 5.0]
+      n:        [uniform, 2.0, 10.0]
+  erk_pathway:
+    pathway_overrides:
+      sigmoid_threshold: [uniform, 0.05, 0.40]
+      sigmoid_slope:     [uniform, 5.0,  20.0]
 ```
+
+### Prior format
+
+A prior value is a `[distribution, lo, hi]` list. Any dict value is treated as a **nested group** and recursed into — there is no fixed depth limit.
+
+The sampled params mirror the prior structure exactly and are deep-merged into the plugin section of the generated config, so any key reachable from `plugins.<plugin_name>` can be calibrated.
+
+### Plugin-level overrides
+
+Two named groups have direct effect on plugin behaviour:
+
+| Group | Read by | Parameters |
+|-------|---------|------------|
+| `pathway_overrides` | `PathwayPlugin` | `sigmoid_threshold`, `sigmoid_slope` |
+| `ois_overrides` | `OISPlugin` | `lambda_0`, `K_0`, `n` |
+
+See [Pathway Plugin](/EvoSeer-Engine/plugins/pathway/#calibration-overrides) and [OIS Plugin](/EvoSeer-Engine/plugins/ois/#calibration-overrides) for details.
+
+## Results format
+
+Every run is recorded regardless of verdict:
+
+```json
+{
+  "acceptance_rate": 0.12,
+  "n_accepted": 6,
+  "n_total": 50,
+  "runs": [
+    {
+      "params": {
+        "melanocyte_ois": {
+          "pathway_overrides": { "sigmoid_threshold": 0.18 },
+          "ois_overrides": { "lambda_0": 0.82, "K_0": 2.1, "n": 6.3 }
+        }
+      },
+      "distance": 0.07,
+      "distance_variance": 0.0002,
+      "n_sims": 34,
+      "verdict": "accepted"
+    }
+  ]
+}
+```
+
+`distance_variance` is the variance of the distance over the last `smoothing_window` simulations — a measure of how stable the estimate was at the time of decision.
 
 ## Running calibration
 
 ```bash
-python calibrate.py --config calibration/config/default_calibration.yaml
+uv run python calibrate.py --config calibration/config/default_calibration.yaml
 ```
 
-Results are written to `calibration_results.json` and contain every accepted
-`(params, distance)` pair, all distances for diagnostics, and the acceptance rate.
+Results are written to `calibration_results.json`. Use the `notebooks/calibration_params_analysis.ipynb` notebook to explore parameter–distance relationships.
 
 ## Module structure
 
 ```
 calibration/
 ├── abc.py          # RejectionABC orchestrator + CalibrationResult
-├── sampler.py      # Prior sampler
-├── summary.py      # Clone size extraction
+├── sampler.py      # Recursive prior sampler
 ├── distance.py     # Pluggable loss functions
-├── config_gen.py   # Temp config.yaml generation
-├── runner.py       # Batch simulation runner
+├── config_gen.py   # Temp config.yaml generation (deep merge)
+├── runner.py       # Simulation runner
 └── target.py       # ISIC 2024 target loader
 ```

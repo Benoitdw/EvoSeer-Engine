@@ -1,10 +1,8 @@
 simulation:
-  max_steps: 1_000
+  max_steps: 10_000
   max_time: 100000000
   max_cells: 5_000
   seed: 7
-  snapshot_interval: 5
-  dump_final_state: true
 
 mutation_store:
   source: ":memory:"
@@ -15,7 +13,8 @@ mutation_generator:
 rate_function:
   type: weighted_sum
   baseline_birth_rate: 0.8
-  baseline_death_rate: 0.0
+  baseline_death_rate: 0.1
+  carrying_capacity: 500
 
 plugins:
   erk_pathway:
@@ -31,18 +30,15 @@ plugins:
     weight: 1.0
     alpha: 0.0
 
-  base_death:
-    type: dummy_death
-    target: rate_function
-    category: deleterious
-    weight: 1.0
-    alpha: 1.0
-
   mutation_rate:
     type: constant_mutation_rate
     target: mutation_rate
+    weight: 1.0
+    alpha: 0.0
     params:
       mu: 1.0
 
 recorder:
   output_dir: results/
+  snapshot_interval: 5
+  dump_final_state: true

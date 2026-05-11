@@ -143,6 +143,11 @@ class PathwayPlugin(FeaturePlugin, ABC):
     def __init__(self, params: dict[str, Any], store: MutationStore) -> None:
         super().__init__(params, store)
         self._definition = PathwayDefinition.load(self.pathway_file)
+        overrides = params.get("pathway_overrides", {})
+        if "sigmoid_threshold" in overrides:
+            self._definition.sigmoid_threshold = float(overrides["sigmoid_threshold"])
+        if "sigmoid_slope" in overrides:
+            self._definition.sigmoid_slope = float(overrides["sigmoid_slope"])
         self._act, self._inh = derive_roles(self._definition)
         self._act_by_id: dict[int, float] = {
             self._definition.nodes[n].gene_id: w

@@ -99,6 +99,10 @@ class SimulationExporter:
         for ev in result.drivers:
             driver_by_step.setdefault(ev.step, []).append((ev.cell_id, ev.mutation_id))
 
+        sen_by_step: dict[int, list[int]] = {}
+        for ev in result.senescence:
+            sen_by_step.setdefault(ev.step, []).append(ev.cell_id)
+
         # step -> t interpolator from snapshots
         interp_t = _make_time_interpolator(result.snapshots)
 
@@ -118,7 +122,8 @@ class SimulationExporter:
         # A clone event ID is unique per acquisition event (f"{mutation_id}_{counter}"),
         # so two independent acquisitions of the same mutation_id create distinct clones.
         cell_clone_events: dict[int, set[str]] = {fid: set() for fid in founder_ids}
-        alive_cells:  set[int]                  = set(founder_ids)
+        alive_cells:       set[int]             = set(founder_ids)
+        senescent_cells:   set[int]             = set()
         driver_acq_order:    list[str]           = []  # clone event IDs, chronological
         driver_acq_step:     dict[str, int]      = {}  # clone_id -> step
         driver_parent_clone: dict[str, str]      = {}  # clone_id -> parent clone_id
@@ -140,6 +145,10 @@ class SimulationExporter:
                     alive_cells.add(child_id)
                 for cid in death_by_step.get(cur_step, []):
                     alive_cells.discard(cid)
+                    senescent_cells.discard(cid)
+                for cid in sen_by_step.get(cur_step, []):
+                    if cid in alive_cells:
+                        senescent_cells.add(cid)
                 for cid, mid in driver_by_step.get(cur_step, []):
                     if cid not in cell_clone_events:
                         cell_clone_events[cid] = set()
@@ -165,6 +174,9 @@ class SimulationExporter:
             snap = snap_by_step[snap_step]
             row: dict[str, Any] = {"step": snap_step, "t": snap.t}
             row.update(_count_clones(alive_cells, cell_clone_events, driver_acq_order))
+            sen_counts = _count_clones(senescent_cells, cell_clone_events, driver_acq_order)
+            for k, v in sen_counts.items():
+                row[k + "_sen"] = v
             clonal_fractions.append(row)
 
         # Advance past all driver events so tree metadata is complete

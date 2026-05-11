@@ -3,8 +3,6 @@ simulation:
   max_time: 365.0
   max_cells: 50_000
   seed: 42
-  snapshot_interval: 500
-  dump_final_state: true
 
 mutation_store:
   source: ":memory:"
@@ -26,3 +24,5 @@ plugins:
 
 recorder:
   output_dir: results/
+  snapshot_interval: 500
+  dump_final_state: true

@@ -4,17 +4,17 @@ description: "Oncogene-Induced Senescence pathway in melanocytes (CellAge-curate
 output_node: CDKN2A
 
 sigmoid:
-  slope: 10
-  threshold: 0.20   # WT: A=0 → S_i = σ(0) = 0.5 (armed but unengaged)
+  slope: 2
+  threshold: 0.50   # WT: A=0 → S_i = σ(0) = 0.5 (armed but unengaged)
 
 ois:
-  lambda_0: 0.64
-  K_0: 1.168        # half-saturation (divisions)
-  n: 5.661             # Hill coefficient
+  lambda_0: 1       # senescence probability multiplier, must be in [0, 1]
+  K_0: 20       # half-saturation (divisions)
+  n: 2              # Hill coefficient
 
 nodes:
-  BRAF:   { gene_id: 673,  weight: 0.50 }   # dominant driver (~50% melanoma nevi)
-  NRAS:   { gene_id: 4893, weight: 0.20 }   # second most common (~20%)
+  BRAF:   { gene_id: 673,  weight: 2 }   # dominant driver (~50% melanoma nevi)
+  NRAS:   { gene_id: 4893, weight: 2 }   # second most common (~20%)
   KRAS:   { gene_id: 3845, weight: 0.05 }
   CDKN2A: { gene_id: 1029, weight: 0.10 }   # output node; GOF adds weakly
 

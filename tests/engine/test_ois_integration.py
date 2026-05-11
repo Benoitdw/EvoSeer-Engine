@@ -166,7 +166,7 @@ def test_cdkn2a_lof_suppresses_hazard():
     ps._dirty = False
     state.plugin_states[plugin.name] = ps
 
-    hazard = plugin.compute_senescence_hazard(state, SimContext(t=0.0, step=0, N=1))
+    hazard = plugin.compute_senescence_probability(state, SimContext(t=0.0, step=0, N=1))
     assert hazard < 0.01
 
 
@@ -183,5 +183,5 @@ def test_senescent_cell_excluded_from_ois_hazard():
     ps._dirty = False
     state.plugin_states[plugin.name] = ps
 
-    hazard = plugin.compute_senescence_hazard(state, SimContext(t=0.0, step=0, N=1))
+    hazard = plugin.compute_senescence_probability(state, SimContext(t=0.0, step=0, N=1))
     assert hazard == 0.0

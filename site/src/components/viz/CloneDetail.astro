@@ -1,0 +1,220 @@
+---
+---
+
+<div id="clone-detail-wrap" style="display:none">
+  <div class="detail-header">
+    <div class="detail-title-group">
+      <span id="clone-detail-label"></span>
+      <span id="clone-detail-gene" class="detail-gene"></span>
+    </div>
+    <button id="close-clone-detail" class="detail-close" title="Close">✕</button>
+  </div>
+  <div class="detail-chart-wrap">
+    <canvas id="clone-detail-canvas"></canvas>
+  </div>
+</div>
+
+<style>
+  #clone-detail-wrap {
+    margin-top: 1rem;
+    border-top: 1px solid #21262d;
+    padding-top: 0.75rem;
+  }
+  .detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 0.25rem 0.5rem;
+  }
+  .detail-title-group {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+  }
+  #clone-detail-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #e6edf3;
+  }
+  .detail-gene {
+    font-size: 0.8rem;
+    color: #8b949e;
+    font-family: ui-monospace, monospace;
+  }
+  .detail-close {
+    background: none;
+    border: none;
+    color: #8b949e;
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0.2rem 0.4rem;
+    line-height: 1;
+  }
+  .detail-close:hover { color: #e6edf3; }
+  .detail-chart-wrap { height: 180px; position: relative; }
+  #clone-detail-canvas { display: block; width: 100% !important; height: 100% !important; }
+</style>
+
+<script>
+import Chart from 'chart.js/auto';
+
+const OIS_THRESHOLD = 0.9;
+
+const oisAnnotationPlugin = {
+  id: 'cloneDetailAnnotation',
+  afterDraw(chart: any) {
+    const { oisX, acqX, color } = chart._annotation ?? {};
+    if (oisX == null && acqX == null) return;
+    const { ctx, chartArea, scales } = chart;
+    ctx.save();
+
+    if (acqX != null) {
+      const px = scales.x.getPixelForValue(acqX);
+      if (px >= chartArea.left && px <= chartArea.right) {
+        ctx.beginPath();
+        ctx.arc(px, chartArea.bottom, 5, 0, Math.PI * 2);
+        ctx.fillStyle = color ?? '#e6edf3';
+        ctx.fill();
+        ctx.strokeStyle = '#0d1117';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+    }
+
+    if (oisX != null) {
+      const px = scales.x.getPixelForValue(oisX);
+      if (px >= chartArea.left && px <= chartArea.right) {
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(px, chartArea.top);
+        ctx.lineTo(px, chartArea.bottom);
+        ctx.strokeStyle = '#f85149';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.font = '11px ui-sans-serif, sans-serif';
+        ctx.fillStyle = '#f85149';
+        ctx.textAlign = px + 60 > chartArea.right ? 'right' : 'left';
+        const textX = ctx.textAlign === 'right' ? px - 5 : px + 5;
+        ctx.fillText('OIS arrest', textX, chartArea.top + 14);
+      }
+    }
+
+    ctx.restore();
+  },
+};
+
+Chart.register(oisAnnotationPlugin);
+
+let detailChart: any = null;
+
+function findOisArrestX(fracs: any[], cloneId: string, xMode: string): number | null {
+  for (const row of fracs) {
+    const total = row[cloneId] ?? 0;
+    const sen   = row[cloneId + '_sen'] ?? 0;
+    if (total > 0 && sen / total >= OIS_THRESHOLD) {
+      return xMode === 'time' ? row.t : row.step;
+    }
+  }
+  return null;
+}
+
+function render(data: any, cloneId: string, xMode: string) {
+  const wrap = document.getElementById('clone-detail-wrap');
+  if (!wrap) return;
+
+  const node = data.clone_tree?.nodes?.find((n: any) => n.id === cloneId);
+  const fracs: any[] = data.clonal_fractions ?? [];
+  if (!fracs.length) return;
+
+  const labelEl = document.getElementById('clone-detail-label');
+  const geneEl  = document.getElementById('clone-detail-gene');
+  if (labelEl) labelEl.textContent = node?.label ?? cloneId;
+  if (geneEl)  geneEl.textContent  = node?.gene ? `(${node.gene})` : '';
+
+  wrap.style.display = '';
+
+  const pts = fracs.map((row: any) => ({
+    x: xMode === 'time' ? row.t : row.step,
+    y: row[cloneId] ?? 0,
+  }));
+
+  const acqX = node
+    ? (xMode === 'time' ? node.acq_t : node.acq_step)
+    : null;
+  const oisX = findOisArrestX(fracs, cloneId, xMode);
+
+  // Derive the clone's color from its position in the palette
+  const PALETTE = [
+    '#58a6ff','#3fb950','#ffa657','#f78166','#d2a8ff',
+    '#79c0ff','#56d364','#ff9f43','#ff6b6b','#a29bfe',
+    '#00cec9','#fdcb6e','#e17055','#74b9ff','#55efc4',
+    '#fd79a8','#b2bec3','#6c5ce7','#fab1a0','#81ecec',
+  ];
+  const allNodes = [...(data.clone_tree?.nodes ?? [])].sort((a: any, b: any) =>
+    a.id === 'wt' ? -1 : b.id === 'wt' ? 1 : a.acq_step - b.acq_step
+  );
+  let ci = 0;
+  const colorMap = new Map(allNodes.map((n: any) => [n.id, n.id === 'wt' ? '#6e7681' : PALETTE[ci++ % PALETTE.length]]));
+  const color = colorMap.get(cloneId) ?? '#58a6ff';
+
+  const canvas = document.getElementById('clone-detail-canvas') as HTMLCanvasElement | null;
+  if (!canvas) return;
+
+  if (detailChart) { detailChart.destroy(); detailChart = null; }
+
+  // Must be set before chart creation so afterDraw sees it on the first render pass
+  const pendingAnnotation = { oisX, acqX, color };
+
+  detailChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      datasets: [{
+        label: node?.label ?? cloneId,
+        data: pts,
+        backgroundColor: color + '44',
+        borderColor: color,
+        borderWidth: 1.5,
+        fill: true,
+        pointRadius: 0,
+        tension: 0.2,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: {
+          type: 'linear',
+          ticks: { color: '#8b949e', maxTicksLimit: 6 },
+          grid: { color: '#21262d' },
+          title: { display: true, text: xMode === 'time' ? 'Time' : 'Cycle', color: '#8b949e' },
+        },
+        y: {
+          ticks: { color: '#8b949e' },
+          grid: { color: '#21262d' },
+          title: { display: true, text: 'N cells', color: '#8b949e' },
+          min: 0,
+        },
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: { enabled: false },
+      },
+    },
+  });
+
+  detailChart._annotation = pendingAnnotation;
+  detailChart.draw();
+}
+
+(window as any).__evoseerRenderCloneDetail = render;
+
+document.getElementById('close-clone-detail')?.addEventListener('click', () => {
+  const wrap = document.getElementById('clone-detail-wrap');
+  if (wrap) wrap.style.display = 'none';
+  if (detailChart) { detailChart.destroy(); detailChart = null; }
+});
+</script>

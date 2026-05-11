@@ -2,6 +2,7 @@
 import MullerPlot from './viz/MullerPlot.astro';
 import PhyloTree from './viz/PhyloTree.astro';
 import ClonalFractions from './viz/ClonalFractions.astro';
+import CloneDetail from './viz/CloneDetail.astro';
 ---
 
 <!-- Drop zone -->
@@ -58,6 +59,7 @@ import ClonalFractions from './viz/ClonalFractions.astro';
   <div class="panels">
     <div id="panel-muller" class="panel">
       <MullerPlot />
+      <CloneDetail />
     </div>
     <div id="panel-phylo" class="panel" style="display:none">
       <PhyloTree />
@@ -226,6 +228,7 @@ import ClonalFractions from './viz/ClonalFractions.astro';
   const renderers  = { muller: '__evoseerRenderMuller', phylo: '__evoseerRenderPhylo', clones: '__evoseerRenderClones' };
 
   let activeTab = 'muller';
+  let selectedCloneId = null;
 
   function loadFile(file) {
     const reader = new FileReader();
@@ -242,6 +245,7 @@ import ClonalFractions from './viz/ClonalFractions.astro';
 
   window.__evoseerLoadFile = function (filename, data) {
     window.__evoseerData = data;
+    selectedCloneId = null;
     showApp(filename, data);
     switchTab('muller');
   };
@@ -316,10 +320,28 @@ import ClonalFractions from './viz/ClonalFractions.astro';
 
   function reset() {
     window.__evoseerData = null;
+    selectedCloneId = null;
     appPanel.style.display = 'none';
     dropZone.style.display = '';
     fileInput.value = '';
+    const detailWrap = document.getElementById('clone-detail-wrap');
+    if (detailWrap) detailWrap.style.display = 'none';
   }
+
+  // Clone detail panel
+  document.addEventListener('evoseer:cloneSelect', (e) => {
+    selectedCloneId = e.detail.cloneId;
+    if (window.__evoseerData && window.__evoseerRenderCloneDetail) {
+      window.__evoseerRenderCloneDetail(window.__evoseerData, selectedCloneId, e.detail.xMode);
+    }
+  });
+
+  // Sync CloneDetail when Muller xMode toggle changes
+  document.addEventListener('evoseer:xModeChange', (e) => {
+    if (selectedCloneId && window.__evoseerData && window.__evoseerRenderCloneDetail) {
+      window.__evoseerRenderCloneDetail(window.__evoseerData, selectedCloneId, e.detail.xMode);
+    }
+  });
 
   // Tab clicks
   tabs.forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)));
@@ -340,5 +362,7 @@ import ClonalFractions from './viz/ClonalFractions.astro';
   fileInput.addEventListener('change', () => {
     if (fileInput.files?.[0]) loadFile(fileInput.files[0]);
   });
+
+  window.__evoseerBrowse = () => fileInput.click();
 })();
 </script>

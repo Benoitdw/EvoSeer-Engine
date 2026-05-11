@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 from abc import ABC
 from dataclasses import dataclass, field
@@ -49,18 +50,17 @@ class OISPlugin(PathwayPlugin, ABC):
         OISPluginState per cell (k, t_trigger, is_senescent)
         on_division()        -- increments k on parent, propagates to child
         on_mutation_acquired() -- resets k when a new OIS-triggering mutation is acquired
-        compute_senescence_hazard() -- λ_i^OIS = S_i · λ₀ · Hill(k, K, n)
+        compute_senescence_probability() -- P_OIS = S_i · λ₀ · Hill(k, K, n), checked at division
         on_senescence()      -- sets is_senescent = True
     """
 
     def __init__(self, params: dict[str, Any], store: MutationStore) -> None:
         super().__init__(params, store)
-        ois_block = self._definition.__dict__.get("_ois_params") or {}
-        # Load OIS-specific params from YAML (stored under the 'ois' key)
         raw = _load_ois_params(self.pathway_file)
-        self._ois_lambda_0: float = float(raw.get("lambda_0", 0.01))
-        self._ois_K: float = float(raw.get("K_0", 15.0))
-        self._ois_n: float = float(raw.get("n", 2.0))
+        overrides = params.get("ois_overrides", {})
+        self._ois_lambda_0: float = float(overrides.get("lambda_0", raw.get("lambda_0", 0.01)))
+        self._ois_K: float = float(overrides.get("K_0", raw.get("K_0", 15.0)))
+        self._ois_n: float = float(overrides.get("n", raw.get("n", 2.0)))
 
     # ── PluginState lifecycle ────────────────────────────────────────────────
 
@@ -111,10 +111,10 @@ class OISPlugin(PathwayPlugin, ABC):
                 ps.t_trigger = step
                 ps.mark_dirty()
 
-    def compute_senescence_hazard(
+    def compute_senescence_probability(
         self, cell_state: CellState, ctx: SimContext
     ) -> float:
-        """λ_i^OIS = S_i · λ₀ · Hill(k, K, n)."""
+        """P_OIS = S_i · λ₀ · Hill(k, K, n), clamped to [0, 1]."""
         ps = cell_state.plugin_states.get(self.name)
         if not isinstance(ps, OISPluginState):
             return 0.0
@@ -129,7 +129,14 @@ class OISPlugin(PathwayPlugin, ABC):
         K = self._ois_K
         n = self._ois_n
         hill = (k ** n) / (K ** n + k ** n)
-        return s_i * self._ois_lambda_0 * hill
+        p = s_i * self._ois_lambda_0 * hill
+        if p > 1.0:
+            logging.getLogger(__name__).warning(
+                f"OIS probability {p:.4f} > 1 (lambda_0={self._ois_lambda_0:.3f}, "
+                f"s_i={s_i:.3f}, hill={hill:.3f}) — lambda_0 must be in [0, 1]"
+            )
+            return 1.0
+        return p
 
     def on_senescence(self, cell_state: CellState) -> None:
         """Mark the cell as permanently senescent."""

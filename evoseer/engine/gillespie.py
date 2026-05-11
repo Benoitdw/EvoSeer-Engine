@@ -32,8 +32,9 @@ class GillespieEngine:
         3. Draw waiting time Δt ~ Exp(Λ).
         4. Select a cell proportional to its total rate λ_i.
         5. Select event: division or death.
-        6. Execute event, assign new mutations, mark dirty plugins.
-        7. Record snapshot every ``snapshot_interval`` steps.
+        6. On division: roll P_OIS — if it fires, senesce instead of dividing.
+        7. Execute event, assign new mutations, mark dirty plugins.
+        8. Record snapshot every ``snapshot_interval`` steps.
     """
 
     def __init__(
@@ -103,6 +104,8 @@ class GillespieEngine:
         step = 0
         stop_reason = "max_steps"
 
+        self._recorder.maybe_snapshot(step, t, len(self._cells))
+
         while True:
             N = len(self._cells)
 
@@ -126,25 +129,15 @@ class GillespieEngine:
             cell_list = list(self._cells.values())
             birth_rates: list[float] = []
             death_rates: list[float] = []
-            ois_rates:   list[float] = []
 
             for cell in cell_list:
-                # Compute scores for rate_function AND senescence plugins
-                scores = self._get_all_scores(cell, ctx)
-                rate_scores = {n: s for n, s in scores.items() if n in self._rate_plugins}
+                scores = self._get_scores(cell, ctx)
                 is_sen = self._is_senescent(cell)
-                b, d = self._rate_fn.compute_rates(
-                    rate_scores, self._plugin_configs, N, senescent=is_sen
-                )
-                ois = 0.0 if is_sen else sum(
-                    p.compute_senescence_hazard(cell.state, ctx)
-                    for p in self._senescence_plugins.values()
-                )
+                b, d = self._rate_fn.compute_rates(scores, self._plugin_configs, N, senescent=is_sen)
                 birth_rates.append(b)
                 death_rates.append(d)
-                ois_rates.append(ois)
 
-            total_rates = [b + d + ois for b, d, ois in zip(birth_rates, death_rates, ois_rates)]
+            total_rates = [b + d for b, d in zip(birth_rates, death_rates)]
 
             # 2. Total rate Λ
             Lambda = sum(total_rates)
@@ -161,23 +154,32 @@ class GillespieEngine:
             probs = [r / Lambda for r in total_rates]
             cell_idx: int = self._rng.choice(len(cell_list), p=probs)
             selected_cell = cell_list[cell_idx]
-            b_i   = birth_rates[cell_idx]
-            d_i   = death_rates[cell_idx]
-            ois_i = ois_rates[cell_idx]
-            lambda_i = b_i + d_i + ois_i
+            b_i = birth_rates[cell_idx]
+            d_i = death_rates[cell_idx]
+            lambda_i = b_i + d_i
 
-            # 5. Select event (three-way)
-            r = self._rng.random() * lambda_i
-            if r < b_i:
-                self._execute_division(selected_cell, step, ctx)
-            elif r < b_i + d_i:
-                self._execute_death(selected_cell, step)
-            else:
+            # 5. Select event
+            # Check OIS senescence probability at division time
+            for plugin in self._senescence_plugins.values():
+                self._get_score(selected_cell, plugin, ctx)
+            sen_prob = sum(
+                p.compute_senescence_probability(selected_cell.state, ctx)
+                for p in self._senescence_plugins.values()
+            )
+            if sen_prob > 0.0 and self._rng.random() < sen_prob:
                 self._execute_senescence(selected_cell, step)
+            else:
+                r = self._rng.random() * lambda_i
+                if r < b_i:
+                    self._execute_division(selected_cell, step, ctx)
+                else:
+                    self._execute_death(selected_cell, step)
 
             # 7. Snapshot
             self._recorder.maybe_snapshot(step, t, len(self._cells))
 
+        self._recorder.maybe_snapshot(step, t, len(self._cells))
+        
         return self._recorder.finalise(self._cells, stop_reason)
 
     # ------------------------------------------------------------------
@@ -208,13 +210,6 @@ class GillespieEngine:
             name: self._get_score(cell, plugin, ctx)
             for name, plugin in self._rate_plugins.items()
         }
-
-    def _get_all_scores(self, cell: Cell, ctx: SimContext) -> dict[str, float]:
-        """Collect scores for rate_function AND senescence plugins (ensures cache is warm)."""
-        scores = self._get_scores(cell, ctx)
-        for name, plugin in self._senescence_plugins.items():
-            scores[name] = self._get_score(cell, plugin, ctx)
-        return scores
 
     def _is_senescent(self, cell: Cell) -> bool:
         """True if any plugin state on this cell has is_senescent = True."""
@@ -258,7 +253,11 @@ class GillespieEngine:
         """
         Divide parent: call on_division on all plugins, assign new mutations,
         mark dirty for affected plugins, register child in the active pool.
+
+        Before dividing, rolls P_OIS for each senescence plugin. If it fires,
+        the cell senesces instead of dividing.
         """
+
         # a. Call on_division on all plugins → parent mutated in place, child state built
         child_plugin_states: dict[str, Any] = {}
         for name, plugin in self._plugins.items():

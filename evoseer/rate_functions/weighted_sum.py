@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import logging
+
 from evoseer.core.config import PluginConfig, RateFunctionConfig
 from evoseer.rate_functions.base import RateFunction
+
+logger = logging.getLogger(__name__)
 
 
 class WeightedSumRate(RateFunction):
@@ -28,6 +32,16 @@ class WeightedSumRate(RateFunction):
         self._baseline_birth = config.baseline_birth_rate
         self._baseline_death = config.baseline_death_rate
 
+        if config.carrying_capacity is not None:
+            if config.carrying_capacity <= 0:
+                raise ValueError(
+                    f"carrying_capacity must be > 0, got {config.carrying_capacity}. "
+                    "Use carrying_capacity: null (or omit) for unlimited growth."
+                )
+            self._density_coeff = (self._baseline_birth - self._baseline_death) / config.carrying_capacity
+        else:
+            self._density_coeff = 0.0
+
     def compute_rates(
         self,
         scores: dict[str, float],
@@ -47,7 +61,7 @@ class WeightedSumRate(RateFunction):
         dict without pre-filtering.
         """
         if senescent:
-            return 0.0, max(0.0, self._baseline_death)
+            return 0,0 
 
         birth = self._baseline_birth
         death = self._baseline_death
@@ -61,5 +75,7 @@ class WeightedSumRate(RateFunction):
                 birth += contribution
             elif pc.category == "deleterious":
                 death += contribution
+
+        death += self._density_coeff * N
 
         return max(0.0, birth), max(0.0, death)

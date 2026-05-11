@@ -107,7 +107,9 @@ let xMode = 'time';
 let yMode = 'fraction';
 
 // ── Render ──────────────────────────────────────────────────────────────────
-function render(data: any) {
+function render(data: any, newXMode?: string, newYMode?: string) {
+  if (newXMode !== undefined) xMode = newXMode;
+  if (newYMode !== undefined) yMode = newYMode;
   const canvas = document.getElementById('muller-canvas') as HTMLCanvasElement | null;
   if (!canvas || !data) return;
   const fracs = data.clonal_fractions;
@@ -129,6 +131,7 @@ function render(data: any) {
     });
     return {
       label: node.label || node.id,
+      _cloneId: node.id,
       data: pts,
       backgroundColor: color + 'cc',
       borderColor: color,
@@ -199,6 +202,42 @@ function render(data: any) {
     chart._hoverState = null;
     chart.draw();
   });
+
+  canvas.addEventListener('click', (e) => {
+    if (!chart) return;
+    const rect = canvas.getBoundingClientRect();
+    const xPx = e.clientX - rect.left;
+    const yPx = e.clientY - rect.top;
+    const { chartArea, scales, data: cData } = chart;
+    if (!chartArea || xPx < chartArea.left || xPx > chartArea.right) return;
+
+    const xVal = scales.x.getValueForPixel(xPx);
+    const pts = cData.datasets[0]?.data ?? [];
+    let nearestIdx = 0, minDist = Infinity;
+    pts.forEach((pt: any, i: number) => {
+      const d = Math.abs(pt.x - xVal);
+      if (d < minDist) { minDist = d; nearestIdx = i; }
+    });
+
+    const yVal = scales.y.getValueForPixel(yPx);
+    let cumVal = 0;
+    let clickedCloneId: string | null = null;
+    for (const ds of cData.datasets) {
+      const v = (ds.data[nearestIdx] as any)?.y ?? 0;
+      if (yVal >= cumVal && yVal <= cumVal + v) {
+        clickedCloneId = (ds as any)._cloneId ?? null;
+        break;
+      }
+      cumVal += v;
+    }
+
+    if (clickedCloneId) {
+      canvas.dispatchEvent(new CustomEvent('evoseer:cloneSelect', {
+        bubbles: true,
+        detail: { cloneId: clickedCloneId, xMode },
+      }));
+    }
+  });
 }
 
 (window as any).__evoseerRenderMuller = render;
@@ -210,6 +249,7 @@ document.querySelectorAll('#muller-xmode .tgl').forEach(btn => {
     btn.classList.add('active');
     xMode = (btn as HTMLElement).dataset.val!;
     render((window as any).__evoseerData);
+    document.dispatchEvent(new CustomEvent('evoseer:xModeChange', { detail: { xMode } }));
   });
 });
 document.querySelectorAll('#muller-ymode .tgl').forEach(btn => {

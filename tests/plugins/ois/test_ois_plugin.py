@@ -165,7 +165,7 @@ def test_suppressor_lof_does_not_reset_k():
     assert ps.k == 5
 
 
-# ── compute_senescence_hazard ─────────────────────────────────────────────────
+# ── compute_senescence_probability ─────────────────────────────────────────────────
 
 def test_hazard_zero_before_trigger():
     """No trigger yet → λ_i^OIS = 0."""
@@ -176,7 +176,7 @@ def test_hazard_zero_before_trigger():
     ps._dirty = False
     state.plugin_states[plugin.name] = ps
 
-    assert plugin.compute_senescence_hazard(state, _ctx()) == 0.0
+    assert plugin.compute_senescence_probability(state, _ctx()) == 0.0
 
 
 def test_hazard_zero_at_k_zero():
@@ -188,7 +188,7 @@ def test_hazard_zero_at_k_zero():
     ps._dirty = False
     state.plugin_states[plugin.name] = ps
 
-    assert plugin.compute_senescence_hazard(state, _ctx()) == 0.0
+    assert plugin.compute_senescence_probability(state, _ctx()) == 0.0
 
 
 def test_hazard_increases_with_k():
@@ -202,7 +202,7 @@ def test_hazard_increases_with_k():
         ps._cached_score = 0.88
         ps._dirty = False
         state.plugin_states[plugin.name] = ps
-        hazards.append(plugin.compute_senescence_hazard(state, _ctx()))
+        hazards.append(plugin.compute_senescence_probability(state, _ctx()))
 
     assert all(hazards[i] < hazards[i + 1] for i in range(len(hazards) - 1))
 
@@ -215,7 +215,7 @@ def test_hazard_zero_when_already_senescent():
     ps._dirty = False
     state.plugin_states[plugin.name] = ps
 
-    assert plugin.compute_senescence_hazard(state, _ctx()) == 0.0
+    assert plugin.compute_senescence_probability(state, _ctx()) == 0.0
 
 
 def test_hazard_zero_with_low_si():
@@ -228,7 +228,7 @@ def test_hazard_zero_with_low_si():
     ps._dirty = False
     state.plugin_states[plugin.name] = ps
 
-    hazard = plugin.compute_senescence_hazard(state, _ctx())
+    hazard = plugin.compute_senescence_probability(state, _ctx())
     assert hazard < 0.01  # nearly zero
 
 
@@ -243,3 +243,58 @@ def test_on_senescence_sets_flag():
     plugin.on_senescence(state)
 
     assert ps.is_senescent is True
+
+
+# ── ois_overrides ─────────────────────────────────────────────────────────────
+
+def _plugin_with(**ois_overrides) -> _TestOISPlugin:
+    return _TestOISPlugin({"ois_overrides": ois_overrides}, _store())
+
+
+def test_ois_override_lambda0():
+    """ois_overrides.lambda_0 replaces the YAML value."""
+    plugin = _plugin_with(lambda_0=1.5)
+    assert plugin._ois_lambda_0 == 1.5
+
+
+def test_ois_override_K0():
+    plugin = _plugin_with(K_0=3.0)
+    assert plugin._ois_K == 3.0
+
+
+def test_ois_override_n():
+    plugin = _plugin_with(n=8.0)
+    assert plugin._ois_n == 8.0
+
+
+def test_ois_override_raises_hazard():
+    """Higher lambda_0 produces a larger senescence hazard for the same cell state."""
+    state = _state_with(1)  # BRAF GOF
+    ps = OISPluginState(k=10, t_trigger=0)
+    ps._cached_score = 0.88
+    ps._dirty = False
+
+    plugin_low  = _plugin_with(lambda_0=0.1)
+    plugin_high = _plugin_with(lambda_0=2.0)
+
+    state_low  = _state_with(1)
+    state_low.plugin_states[plugin_low.name]  = OISPluginState(k=10, t_trigger=0)
+    state_low.plugin_states[plugin_low.name]._cached_score = 0.88
+    state_low.plugin_states[plugin_low.name]._dirty = False
+
+    state_high = _state_with(1)
+    state_high.plugin_states[plugin_high.name] = OISPluginState(k=10, t_trigger=0)
+    state_high.plugin_states[plugin_high.name]._cached_score = 0.88
+    state_high.plugin_states[plugin_high.name]._dirty = False
+
+    assert (plugin_high.compute_senescence_probability(state_high, _ctx()) >
+            plugin_low.compute_senescence_probability(state_low, _ctx()))
+
+
+def test_ois_override_does_not_affect_default():
+    """Overriding on one instance does not bleed into a fresh instance."""
+    _ = _plugin_with(lambda_0=99.0, K_0=99.0, n=99.0)
+    fresh = _plugin()
+    assert fresh._ois_lambda_0 != 99.0
+    assert fresh._ois_K != 99.0
+    assert fresh._ois_n != 99.0

@@ -249,6 +249,31 @@ The pathway is deliberately simplified to the core RAS–RAF–MEK–ERK cascade
 
 ---
 
+## Calibration overrides
+
+During ABC calibration, `PathwayPlugin` reads a `pathway_overrides` dict from its `params` and applies it after loading the YAML. This lets the calibration layer modify sigmoid parameters without touching the source YAML files.
+
+Supported keys:
+
+| Key | YAML equivalent | Effect |
+|-----|----------------|--------|
+| `sigmoid_threshold` | `sigmoid.threshold` | Inflection point of the sigmoid |
+| `sigmoid_slope` | `sigmoid.slope` | Steepness of the transition |
+
+In the calibration config:
+
+```yaml
+priors:
+  erk_pathway:
+    pathway_overrides:
+      sigmoid_threshold: [uniform, 0.05, 0.40]
+      sigmoid_slope:     [uniform, 5.0,  20.0]
+```
+
+The override is applied per-instance and does not mutate the source YAML — two plugin instances with different `pathway_overrides` are fully independent.
+
+---
+
 ## Adding a new pathway
 
 1. **Write the YAML** — place it in `evoseer/plugins/pathway/data/my_pathway.yaml`. Follow the same schema: `name`, `output_node`, `sigmoid`, `nodes` (with `gene_id` and `weight`), `edges`.

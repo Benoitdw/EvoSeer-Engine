@@ -18,7 +18,7 @@ from evoseer.services.mutation_store import MutationStore
 
 from calibration.stores import BRAF_GOF_ID, NRAS_GOF_ID, build_erk_ois_store
 
-N_FOUNDERS = 10
+N_FOUNDERS = 500
 
 
 def _build_engine(config, store: MutationStore) -> GillespieEngine:
@@ -73,20 +73,27 @@ def run_single(config_path: Path, seed: int) -> list[float]:
     result = engine.run(founders)
 
     exporter = SimulationExporter(result, store, config)
+
     data = exporter.export()
+
+    if config.recorder.output_dir :
+        config.recorder.output_dir.mkdir(exist_ok=True, parents=True)
+        export_file = config.recorder.output_dir/ f"simulation.{seed}.evoseer.json"
+        logger.debug(f"Simulation {seed} exported to {export_file}")
+        exporter.save(export_file)
 
     clones = [
         float(node["final_size"])
         for node in data["clone_tree"]["nodes"]
         if node["id"] != "wt" and node["final_size"] > 0
     ]
-    logger.debug("  → %d clones", len(clones))
+    logger.debug(f"  → {len(clones)} clones")
     return clones
 
 
 def run_batch(config_path: Path, n_sims: int, base_seed: int) -> list[float]:
     """Run n_sims simulations and return pooled non-wt clone sizes."""
-    logger.info("run_batch n=%d base_seed=%d", n_sims, base_seed)
+    logger.info(f"run_batch n={n_sims} base_seed={base_seed}")
     pooled: list[float] = []
     for i in range(n_sims):
         pooled.extend(run_single(config_path, seed=base_seed + i))

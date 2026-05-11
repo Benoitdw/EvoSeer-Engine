@@ -1,19 +1,19 @@
 ---
 title: OIS Pathway Plugin
-description: OISPlugin — how Oncogene-Induced Senescence is modelled as a stochastic hazard driven by genotypic susceptibility and a per-cell division counter
+description: OISPlugin — how Oncogene-Induced Senescence is modelled as a stochastic probability checked at each division, driven by genotypic susceptibility and a per-cell division counter
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 import OISWidget from '../../../components/OISWidget.astro';
 
-Oncogene-Induced Senescence (OIS) is the primary barrier between a benign nevus and melanoma. When a melanocyte acquires a strong oncogenic mutation (e.g. BRAF V600E), the cell's own sensing machinery can detect the anomalous proliferative signal and permanently arrest the cell cycle. EvoSeer models OIS as two decoupled components: a **genotypic susceptibility score S_i** and a **stochastic firing hazard λ_i^OIS**.
+Oncogene-Induced Senescence (OIS) is the primary barrier between a benign nevus and melanoma. When a melanocyte acquires a strong oncogenic mutation (e.g. BRAF V600E), the cell's own sensing machinery can detect the anomalous proliferative signal and permanently arrest the cell cycle. EvoSeer models OIS as two decoupled components: a **genotypic susceptibility score S_i** and a **stochastic senescence probability P_OIS checked at each division**.
 
 ---
 
 ## Two-component model
 
 $$
-\lambda_i^{\mathrm{OIS}}(t) = S_i \cdot \lambda_0 \cdot \mathrm{Hill}(k_i,\, K,\, n)
+P_i^{\mathrm{OIS}} = S_i \cdot \lambda_0 \cdot \mathrm{Hill}(k_i,\, K,\, n)
 \qquad\text{(Eq. 2.10)}
 $$
 
@@ -21,11 +21,11 @@ $$
 |--------|------|---------|
 | $S_i$ | `float ∈ (0,1)` | Genotypic susceptibility — how armed the OIS machinery is |
 | $k_i$ | `int ≥ 0` | Divisions undergone since first OIS-triggering mutation |
-| $\lambda_0$ | `float` | Overall rate scale (YAML `ois.lambda_0`) |
+| $\lambda_0$ | `float ∈ [0,1]` | Probability scale (YAML `ois.lambda_0`) |
 | $K$ | `float` | Half-saturation division count (YAML `ois.K_0`) |
 | $n$ | `float` | Hill coefficient (YAML `ois.n`) |
 
-When $\lambda_i^{\mathrm{OIS}}$ fires (a third Gillespie event type alongside birth and death), the cell is **permanently arrested**: birth rate → 0, death rate unchanged.
+When $P_i^{\mathrm{OIS}}$ fires (checked at each division attempt, before the child cell is created), the cell is **permanently arrested**: birth rate → 0, death rate unchanged.
 
 <Aside type="note">
 Hill(0, K, n) = 0 — a cell that has just acquired its first driver has zero hazard until it starts dividing. The replicative stress that drives OIS accumulates through division cycles, not real time (H2 hypothesis).
@@ -99,8 +99,8 @@ This is the canonical example of why `CellState.plugin_states` holds subclassabl
 `MelanocyteOISPlugin` uses `target: "senescence"` in the YAML config. This is a third plugin target type (alongside `"rate_function"` and `"mutation_rate"`):
 
 - Scores are computed and cached normally (S_i via the sigmoid formula).
-- The score is **not** passed to `WeightedSumRate` — it feeds into $\lambda_i^{\mathrm{OIS}}$ instead.
-- The Gillespie engine adds the OIS hazard to the per-cell rate pool as a third event.
+- The score is **not** passed to `WeightedSumRate` — it feeds into $P_i^{\mathrm{OIS}}$ instead.
+- The Gillespie engine does **not** add OIS to the per-cell rate pool. Instead, when a cell is selected for division, $P_i^{\mathrm{OIS}}$ is sampled: if it fires, the cell senesces instead of dividing.
 
 When the event fires, `WeightedSumRate.compute_rates()` receives `senescent=True` and returns `(0.0, baseline_death_rate)` regardless of all other plugin scores.
 
@@ -158,7 +158,7 @@ Inherits all of `PathwayPlugin` (YAML loading, DFS, sigmoid). Adds:
 - **`init_state()`** → fresh `OISPluginState(k=0)`
 - **`on_division()`** → increments `k` on parent; child inherits same value
 - **`on_mutation_acquired(mut_id, cell_state, step)`** → resets `k=0` if new mutation is GOF in $\mathrm{OIS_{act}}$
-- **`compute_senescence_hazard(cell_state, ctx)`** → $S_i \cdot \lambda_0 \cdot \text{Hill}(k, K, n)$
+- **`compute_senescence_probability(cell_state, ctx)`** → $S_i \cdot \lambda_0 \cdot \text{Hill}(k, K, n) \in [0, 1]$
 - **`on_senescence(cell_state)`** → sets `is_senescent = True`
 
 ### `MelanocyteOISPlugin` — concrete
@@ -172,6 +172,41 @@ class MelanocyteOISPlugin(OISPlugin):
 
 ---
 
+## Calibration overrides
+
+During ABC calibration, `OISPlugin` reads an `ois_overrides` dict from its `params` and applies it after loading the YAML `ois` block. This lets the calibration layer explore the hazard dynamics without touching `melanocyte_ois.yaml`.
+
+Supported keys:
+
+| Key | YAML equivalent | Effect |
+|-----|----------------|--------|
+| `lambda_0` | `ois.lambda_0` | Senescence probability multiplier ∈ [0, 1] |
+| `K_0` | `ois.K_0` | Half-saturation — number of divisions to reach 50 % max hazard |
+| `n` | `ois.n` | Hill coefficient — sharpness of the division-count response |
+
+The sigmoid parameters (`sigmoid_threshold`, `sigmoid_slope`) are handled by the parent `PathwayPlugin` via `pathway_overrides` (see [Pathway Plugin](/EvoSeer-Engine/plugins/pathway/#calibration-overrides)).
+
+In the calibration config:
+
+```yaml
+priors:
+  melanocyte_ois:
+    pathway_overrides:
+      sigmoid_threshold: [uniform, 0.05, 0.40]
+    ois_overrides:
+      lambda_0: [uniform, 0.01, 1.0]
+      K_0:      [uniform, 0.5, 5.0]
+      n:        [uniform, 2.0, 10.0]
+```
+
+The override is applied per-instance and does not mutate the source YAML.
+
+<Aside type="note">
+$\lambda_0$, $K$, and $n$ are the primary calibration targets for the OIS model — they control how likely and sharply the senescence programme fires at each division after a driver mutation is acquired, and will be fitted against the ISIC 2024 nevus size distribution. $\lambda_0$ must remain in $[0, 1]$; values outside this range will trigger a runtime warning.
+</Aside>
+
+---
+
 ## OIS escape and melanoma progression
 
 A cell escapes OIS when $S_i \approx 0$, which occurs when anti-senescence mutations accumulate:
@@ -179,7 +214,7 @@ A cell escapes OIS when $S_i \approx 0$, which occurs when anti-senescence mutat
 - **CDKN2A biallelic loss** (two LOF mutations, weight 1.50 each): $A \leq -3.0$ → $S_i \approx 0$
 - **TP53 LOF** (weight 0.50): partial suppression, accelerates escape when combined with CDKN2A loss
 
-An escaped cell has $\lambda_i^{\mathrm{OIS}} \approx 0$ regardless of $k_i$ — it never arrests. Its descendants form the clonal expansion that characterises melanoma progression.
+An escaped cell has $P_i^{\mathrm{OIS}} \approx 0$ regardless of $k_i$ — it never arrests. Its descendants form the clonal expansion that characterises melanoma progression.
 
 <Aside type="note">
 In the nevi model, immunogenicity is negligible and the dominant dynamic is the balance between OIS firing (nevus arrest) and OIS escape (malignant progression). The parameters $\lambda_0$, $K$, and $n$ will be calibrated by ABC against the ISIC 2024 nevus size distribution.

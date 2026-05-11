@@ -1,4 +1,4 @@
-"""Prior sampler — draws (weight, alpha) per plugin."""
+"""Prior sampler — draws parameters per plugin from independent priors."""
 
 from __future__ import annotations
 
@@ -7,23 +7,29 @@ import numpy as np
 
 class PriorSampler:
     """
-    Samples plugin parameters from independent uniform priors.
+    Samples plugin parameters from independent priors.
 
-    priors format:
-        {plugin_name: {weight: [uniform, lo, hi], alpha: [uniform, lo, hi]}}
+    priors format (arbitrarily nested):
+        {plugin_name: {param: [uniform, lo, hi], group: {param: [uniform, lo, hi]}}}
+
+    A list value is treated as a prior spec; a dict value is recursed into.
     """
 
     def __init__(self, priors: dict) -> None:
         self._priors = priors
 
-    def sample(self, rng: np.random.Generator) -> dict[str, dict[str, float]]:
-        result: dict[str, dict[str, float]] = {}
-        for plugin_name, param_specs in self._priors.items():
-            result[plugin_name] = {}
-            for param_name, spec in param_specs.items():
-                dist, lo, hi = spec[0], float(spec[1]), float(spec[2])
+    def sample(self, rng: np.random.Generator) -> dict:
+        return self._sample_group(self._priors, rng)
+
+    def _sample_group(self, group: dict, rng: np.random.Generator) -> dict:
+        result = {}
+        for key, value in group.items():
+            if isinstance(value, dict):
+                result[key] = self._sample_group(value, rng)
+            else:
+                dist, lo, hi = value[0], float(value[1]), float(value[2])
                 if dist == "uniform":
-                    result[plugin_name][param_name] = float(rng.uniform(lo, hi))
+                    result[key] = float(rng.uniform(lo, hi))
                 else:
                     raise ValueError(f"Unknown prior distribution: {dist!r}")
         return result

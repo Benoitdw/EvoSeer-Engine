@@ -18,6 +18,9 @@ export default defineConfig({
       social: {
         github: 'https://github.com/bdewitte/EvoSeerEngine',
       },
+      components: {
+        SocialIcons: './src/components/VisualizerNavButton.astro',
+      },
       sidebar: [
         {
           label: 'Getting Started',

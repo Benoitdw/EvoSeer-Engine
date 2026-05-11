@@ -8,6 +8,15 @@ from pathlib import Path
 import yaml
 
 
+def _deep_update(target: dict, overrides: dict) -> None:
+    """Recursively merge overrides into target in-place."""
+    for key, value in overrides.items():
+        if isinstance(value, dict) and isinstance(target.get(key), dict):
+            _deep_update(target[key], value)
+        else:
+            target[key] = value
+
+
 def generate(
     base_config_path: str | Path,
     params: dict[str, dict[str, float]],
@@ -27,19 +36,23 @@ def generate(
     raw: dict = yaml.safe_load(Path(base_config_path).read_text())
 
     plugins_raw = raw.setdefault("plugins", {})
-    for plugin_name, overrides in params.items():
-        if plugin_name not in plugins_raw:
-            continue
-        if "weight" in overrides:
-            plugins_raw[plugin_name]["weight"] = overrides["weight"]
-        if "alpha" in overrides:
-            plugins_raw[plugin_name]["alpha"] = overrides["alpha"]
+    for name, overrides in params.items():
+        if name == "rate_function":
+            _deep_update(raw.setdefault("rate_function", {}), overrides)
+        elif name in plugins_raw:
+            _deep_update(plugins_raw[name], overrides)
 
     suffix = ".yaml"
     kw = {"dir": str(tmp_dir)} if tmp_dir is not None else {}
     fd = tempfile.NamedTemporaryFile(
         mode="w", suffix=suffix, delete=False, prefix="evoseer_abc_", **kw
     )
+    config_path = Path(fd.name)
+
+    # Give each calibration run its own output dir derived from the temp file name.
+    output_dir = config_path.parent / config_path.stem
+    raw.setdefault("recorder", {})["output_dir"] = str(output_dir)
+
     yaml.dump(raw, fd)
     fd.close()
-    return Path(fd.name)
+    return config_path

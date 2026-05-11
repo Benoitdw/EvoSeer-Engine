@@ -53,10 +53,10 @@ class FeaturePlugin(ABC):
     ) -> None:
         """Called after a new mutation is assigned to a cell. Override to react."""
 
-    def compute_senescence_hazard(
+    def compute_senescence_probability(
         self, cell_state: CellState, ctx: SimContext
     ) -> float:
-        """Return λ_i^OIS for senescence-target plugins. Default: 0."""
+        """Return P_OIS ∈ [0, 1] checked at division time. Default: 0."""
         return 0.0
 
     def on_senescence(self, cell_state: CellState) -> None:

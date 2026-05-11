@@ -1,11 +1,11 @@
 base_config: evoseer/config/erk_ois.yaml
 
 n_samples: 10
-n_sims: 100
+max_sims: 50
 epsilon: 1
-distance: l1
+distance: MSE
 base_seed: 42
-smoothing_window : 5 
+smoothing_window : 10
 
 stages: 
   - [0.1, 5]
@@ -16,9 +16,5 @@ target:
   data_dir: /home/ben/projects/EvoSeerEngine/ISIC_2024
 
 priors:
-  erk_pathway:
-    weight: [uniform, 0.0, 3.0]
-    alpha:  [uniform, -1.0, 1.0]
-  base_death:
-    weight: [uniform, 0.0, 3.0]
-    alpha:  [uniform,  0.0, 2.0]
+  rate_function:
+    carrying_capacity:   [uniform, 100, 500]

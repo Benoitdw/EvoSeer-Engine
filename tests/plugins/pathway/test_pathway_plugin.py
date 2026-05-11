@@ -132,3 +132,38 @@ def test_effect_none_ignored():
     assert plugin.compute_score(state_mut, _ctx()) == pytest.approx(
         plugin.compute_score(state_wt, _ctx())
     )
+
+
+# ---------------------------------------------------------------------------
+# pathway_overrides
+# ---------------------------------------------------------------------------
+
+def test_pathway_override_sigmoid_threshold():
+    """A higher sigmoid_threshold shifts the WT score down."""
+    store = _make_store()
+    state = CellState(mutations=set())
+    plugin_default  = ErkPathwayPlugin({}, store)
+    plugin_override = ErkPathwayPlugin({"pathway_overrides": {"sigmoid_threshold": 0.8}}, store)
+    assert plugin_override.compute_score(state, _ctx()) < plugin_default.compute_score(state, _ctx())
+
+
+def test_pathway_override_sigmoid_slope():
+    """A steeper slope pushes the score closer to 0 or 1 for the same input."""
+    store = _make_store(
+        MutationRecord(mutation_id=1, gene_id=673, gene_name="BRAF",
+                       pathways=["ERK"], is_driver=True, effect="GOF")
+    )
+    state = CellState(mutations={1})
+    plugin_flat  = ErkPathwayPlugin({"pathway_overrides": {"sigmoid_slope": 1.0}}, store)
+    plugin_steep = ErkPathwayPlugin({"pathway_overrides": {"sigmoid_slope": 50.0}}, store)
+    assert plugin_steep.compute_score(state, _ctx()) > plugin_flat.compute_score(state, _ctx())
+
+
+def test_pathway_override_does_not_mutate_yaml():
+    """Applying an override on one instance does not affect a freshly created one."""
+    store = _make_store()
+    state = CellState(mutations=set())
+    _ = ErkPathwayPlugin({"pathway_overrides": {"sigmoid_threshold": 0.9}}, store)
+    plugin_fresh = ErkPathwayPlugin({}, store)
+    # Fresh plugin should still use the YAML default (0.20), not the override
+    assert plugin_fresh._definition.sigmoid_threshold == pytest.approx(0.20)

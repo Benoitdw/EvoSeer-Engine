@@ -2,17 +2,26 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from evoseer.core.config import PluginConfig, RateFunctionConfig, SimulationConfig
 from evoseer.engine.gillespie import GillespieEngine
-from evoseer.plugins.ois import OISPluginState
+from evoseer.plugins.ois import OISPlugin, OISPluginState
 from evoseer.plugins.ois.melanocyte import MelanocyteOISPlugin
 from evoseer.rate_functions.weighted_sum import WeightedSumRate
 from evoseer.recording.recorder import Recorder
 from evoseer.services.mutation_store import InMemoryMutationStore, MutationRecord
 
 from tests.conftest import FixedMutationGenerator
+
+
+class _TestOISPlugin(OISPlugin):
+    """OIS plugin backed by tests/data/ois_test.yaml for stable assertions."""
+    name = "melanocyte_ois"
+    pathway_file = Path(__file__).parents[1] / "data" / "ois_test.yaml"
+    involved_pathways = ["OIS"]
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -159,7 +168,7 @@ def test_cdkn2a_lof_suppresses_hazard():
     from evoseer.core.cell import CellState
     from evoseer.core.context import SimContext
 
-    plugin = MelanocyteOISPlugin({}, store)
+    plugin = _TestOISPlugin({}, store)
     state = CellState(mutations={20})  # CDKN2A LOF only
     ps = OISPluginState(k=50, t_trigger=0)
     ps._cached_score = plugin.compute_score(state, SimContext(t=0.0, step=0, N=1))
